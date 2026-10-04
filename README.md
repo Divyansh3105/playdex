@@ -75,3 +75,7 @@ To sign, add a certificate to electron-builder (`win.signtoolOptions` or Azure A
 then `npm run dist`. A signed installer passes Smart App Control and builds SmartScreen reputation over time.
 
 `npm test` covers title matching, de-duplication, Steam ID detection and launch validation.
+
+## License
+
+[MIT](LICENSE) © 2026 Divyansh Garg

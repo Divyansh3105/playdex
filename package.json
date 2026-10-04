@@ -3,6 +3,7 @@
   "productName": "Playdex",
   "version": "1.0.0",
   "description": "All your Steam, Epic and GOG games in one place",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "main.mjs",
