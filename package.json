@@ -1,0 +1,45 @@
+{
+  "name": "playdex",
+  "productName": "Playdex",
+  "version": "1.0.0",
+  "description": "All your Steam, Epic and GOG games in one place",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.playdex.app",
+    "files": ["main.mjs", "preload.cjs", "scan.mjs", "public/**"],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "enableCookieEncryption": true,
+      "grantFileProtocolExtraPrivileges": false
+    }
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  }
+}
