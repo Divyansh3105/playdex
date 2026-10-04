@@ -4,6 +4,8 @@ A desktop app (Electron) that shows all your Steam, Epic and GOG games in one pl
 
 ![Playdex library: every Steam, Epic and GOG game in one cover grid, with store badges and per-store counts](docs/screenshot-library.jpg)
 
+![Duplicates tab: the 12 games owned on more than one store, each with a button per store](docs/screenshot-duplicates.jpg)
+
 ![Game details: description, developer, release date and genres, with an Install button for each store that owns the game](docs/screenshot-details.jpg)
 
 ```
