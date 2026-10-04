@@ -173,6 +173,43 @@ function steamOwnedFromCache(root, installed) {
     .map(id => [id, info.get(id).name]));
 }
 
+/** Text KeyValues (.vdf/.acf): "key" "value" pairs and "key" { … } blocks. Object.create(null): file data. */
+export function parseVdf(text) {
+  const root = Object.create(null), stack = [root];
+  let key = null;
+  for (const [, str, brace] of text.matchAll(/"((?:[^"\\]|\\.)*)"|([{}])/g)) {
+    const top = stack.at(-1);
+    if (brace === '{') { const obj = Object.create(null); if (key != null) top[key] = obj; stack.push(obj); key = null; }
+    else if (brace === '}') { if (stack.length > 1) stack.pop(); key = null; }
+    else if (key == null) key = str;
+    else { top[key] = str.replace(/\\(.)/g, '$1'); key = null; }
+  }
+  return root;
+}
+
+// Steam writes keys with varying case ("Valve" vs "valve").
+const vdfGet = (obj, ...keys) =>
+  keys.reduce((o, k) => (o ? Object.entries(o).find(([name]) => name.toLowerCase() === k.toLowerCase())?.[1] : undefined), obj);
+
+/** appid -> { playtime (minutes), lastPlayed (ms) } from a user's config/localconfig.vdf. */
+export function steamPlaytimes(localconfig) {
+  const apps = vdfGet(parseVdf(localconfig), 'UserLocalConfigStore', 'Software', 'Valve', 'Steam', 'apps') ?? {};
+  const num = v => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+  return new Map(Object.entries(apps).filter(([id]) => /^\d+$/.test(id)).map(([id, a]) => [id, {
+    playtime: num(vdfGet(a, 'Playtime')),
+    lastPlayed: num(vdfGet(a, 'LastPlayed')) * 1000 || undefined,
+  }]));
+}
+
+// Playtime lives per account in userdata/<account id>/config/localconfig.vdf.
+function steamPlaytimesFor(root, steamId) {
+  const dirs = fs.readdirSync(path.join(root, 'userdata')).filter(d => /^\d+$/.test(d));
+  const account = /^\d{17}$/.test(steamId ?? '') ? String(BigInt(steamId) - 76561197960265728n) : undefined;
+  const dir = dirs.includes(account) ? account : dirs.length === 1 ? dirs[0] : null;
+  if (!dir) throw new Error('several Steam accounts on this PC; add "steamId" to config.json');
+  return steamPlaytimes(fs.readFileSync(path.join(root, 'userdata', dir, 'config/localconfig.vdf'), 'utf8'));
+}
+
 async function scanSteam(notes) {
   const root = steamRoot();
   const installed = steamInstalled(root);
@@ -184,9 +221,15 @@ async function scanSteam(notes) {
     catch (e) { notes.push(`Steam API: ${e.message}. Using Steam's local cache instead.`); }
   }
   owned ??= steamOwnedFromCache(root, installed);
+  let times = null; // null = unknown, so the app shows nothing rather than "Not played"
+  try {
+    const loginusers = path.join(root, 'config/loginusers.vdf');
+    times = steamPlaytimesFor(root, config.steamId ?? (fs.existsSync(loginusers) ? parseLoginUsers(fs.readFileSync(loginusers, 'utf8')) : undefined));
+  } catch (e) { notes.push(`Steam playtime unavailable: ${e.message}.`); }
   const art = `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps`;
   return [...owned].map(([id, title]) => ({
     id: `steam:${id}`, store: 'steam', title, installed: installed.has(id),
+    playtime: times ? (times.get(id)?.playtime ?? 0) : null, lastPlayed: times?.get(id)?.lastPlayed,
     cover: `${art}/${id}/library_600x900.jpg`,
     fallback: `${art}/${id}/header.jpg`,
     launch: uriLaunch(installed.has(id) ? `steam://rungameid/${id}` : `steam://install/${id}`),
@@ -223,6 +266,7 @@ function scanEpic() {
         // Epic's cache stores ™/® as a literal "?" ("Apex Legends?"), so drop "?" glued to the end of a word
         // ponytail: also eats a real trailing "?" in a title; rare enough to ignore
         id: `epic:${i.id}`, store: 'epic', title: i.title.replace(/(?<=\w)\?(?=[\s:]|$)/g, ''), installed: installed.has(i.id),
+        playtime: null, // Epic keeps playtime only in its encrypted account data
         cover: img && `${img.url}?w=360&h=480&resize=1`,
         launch: uriLaunch(`com.epicgames.launcher://apps/${i.namespace}%3A${i.id}%3A${i.releaseInfo?.[0]?.appId}?action=launch&silent=true`),
       };
@@ -255,12 +299,17 @@ function scanGog() {
     // Optional pieces: a malformed one (the DB is writable by other users) must not break the whole scan.
     const json = s => { try { return JSON.parse(s) ?? {}; } catch { return {}; } };
     return db.prepare(`select lr.releaseKey as key, ${piece('title')} as title, ${piece('originalImages')} as images,
-      ${piece('summary')} as summary, ${piece('meta')} as meta
+      ${piece('summary')} as summary, ${piece('meta')} as meta,
+      (select max(minutesInGame) from GameTimes where releaseKey = lr.releaseKey) as minutes,
+      (select max(lastPlayedDate) from LastPlayedDates where gameReleaseKey = lr.releaseKey) as lastPlayed
       from (select distinct l.releaseKey from LibraryReleases l join ReleaseProperties p on p.releaseKey = l.releaseKey
             where l.releaseKey like 'gog_%' and p.isDlc = 0 and p.isVisibleInLibrary = 1) lr`).all()
       .filter(r => r.title)
       .map(r => ({
         id: `gog:${r.key}`, store: 'gog', title: JSON.parse(r.title).title, installed: installed.has(r.key),
+        playtime: Number.isFinite(r.minutes) && r.minutes > 0 ? r.minutes : 0,
+        // "2024-12-15 07:22:03" (UTC); unparseable -> unknown
+        lastPlayed: Date.parse(String(r.lastPlayed ?? '').replace(' ', 'T') + 'Z') || undefined,
         cover: json(r.images).verticalCover ?? undefined,
         info: (({ developers, publishers, genres, releaseDate }) => ({
           description: json(r.summary).summary || undefined, developers, publishers, genres,

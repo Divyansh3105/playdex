@@ -56,6 +56,17 @@ Your Steam ID is read from Steam's `config/loginusers.vdf`. To use a different a
 `config.json` is git-ignored. Don't share the key, because it acts on your behalf with the Steam Web API.
 If the key fails, the app falls back to the local cache and shows why.
 
+## Playtime and sorting
+
+Each card shows how long you've played and when you last played ("98 h · 9 months ago", or "Not played").
+The **Sort** menu orders the library by name, recently played, most played, or installed first, and remembers your choice.
+
+| Store | Playtime and last played |
+|---|---|
+| Steam | `userdata/<account>/config/localconfig.vdf` (the account matching your Steam ID) |
+| GOG | Galaxy's `GameTimes` and `LastPlayedDates` tables |
+| Epic | Not available: Epic keeps it only in its encrypted account data, so Epic games show no playtime |
+
 ## Game details
 
 Clicking a game opens its details: description, developer, publisher, release date and genres, with a

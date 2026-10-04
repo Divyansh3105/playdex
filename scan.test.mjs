@@ -3,7 +3,31 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { normalize, findDuplicates, dedupeWithinStores, parseLoginUsers, uriLaunch, gogLaunch, parseAppInfo } from './scan.mjs';
+import { normalize, findDuplicates, dedupeWithinStores, parseLoginUsers, uriLaunch, gogLaunch, parseAppInfo, parseVdf, steamPlaytimes } from './scan.mjs';
+
+test('text VDF: nesting, escapes, unbalanced input, no prototype tricks', () => {
+  const v = parseVdf('"a" { "b" "1" "c" { "d" "say \\"hi\\"" } } "e" "2"');
+  assert.equal(v.a.b, '1');
+  assert.equal(v.a.c.d, 'say "hi"');
+  assert.equal(v.e, '2');
+  assert.doesNotThrow(() => parseVdf('} } "x" { "y" "1"')); // stray / missing braces don't crash
+  assert.equal(Object.getPrototypeOf(parseVdf('"__proto__" { "polluted" "yes" }').__proto__), null);
+  assert.equal({}.polluted, undefined);
+});
+
+test('Steam playtime and last played from localconfig.vdf', () => {
+  const t = steamPlaytimes(`"UserLocalConfigStore" { "Software" { "valve" { "Steam" { "apps" {
+    "730" { "LastPlayed" "1774886983" "Playtime" "1186" }
+    "7" { "cloud" { "last_sync_state" "synchronized" } }
+    "480" { "Playtime" "oops" }
+    "x1" { "Playtime" "5" }
+  } } } } }`); // note lowercase "valve": Steam's key case varies
+  assert.deepEqual(t.get('730'), { playtime: 1186, lastPlayed: 1774886983000 });
+  assert.deepEqual(t.get('7'), { playtime: 0, lastPlayed: undefined });
+  assert.deepEqual(t.get('480'), { playtime: 0, lastPlayed: undefined }); // garbage -> 0, not NaN
+  assert.equal(t.has('x1'), false);                                      // non-numeric app ids ignored
+  assert.equal(steamPlaytimes('').size, 0);
+});
 import { plainText, exactHit } from './details.mjs';
 
 test('Steam description text: tags stripped, entities decoded, junk left alone', () => {

@@ -1,6 +1,7 @@
 const STORES = { steam: 'Steam', epic: 'Epic', gog: 'GOG' };
 const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STORES).indexOf(b.store); // always Steam, Epic, GOG
-const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), installed: false };
+const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), installed: false, sort: 'name' };
+try { if (localStorage.sort in { name: 1, recent: 1, playtime: 1, installed: 1 }) state.sort = localStorage.sort; } catch { /* storage unavailable */ }
 let data = null;
 
 const $ = id => document.getElementById(id);
@@ -33,6 +34,28 @@ function cover(g) {
 
 const actionLabel = g => g.installed ? '▶ Play' : g.store === 'gog' ? 'Open in GOG Galaxy' : '⬇ Install';
 
+// ---------- playtime ----------
+// playtime: minutes; 0 = store tracks it but never played; null = store doesn't tell us (Epic).
+const hours = m => (m < 1 ? '< 1 min' : m < 60 ? `${m} min` : `${(m / 60).toFixed(m < 600 ? 1 : 0)} h`);
+const hoursLong = m => (m < 60 ? hours(m) : `${Math.floor(m / 60)} h ${m % 60} min`);
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+function ago(ms) {
+  const days = Math.round((ms - Date.now()) / 864e5);
+  if (Math.abs(days) < 31) return rtf.format(days, 'day');
+  if (Math.abs(days) < 365) return rtf.format(Math.round(days / 30.4), 'month');
+  return rtf.format(Math.round(days / 365), 'year');
+}
+const played = g => g.playtime > 0 || g.lastPlayed;
+const playLine = g => g.playtime == null ? '' : !played(g) ? 'Not played' : [hours(g.playtime), g.lastPlayed && ago(g.lastPlayed)].filter(Boolean).join(' · ');
+
+// Scan order is A–Z, and sort() is stable, so ties stay alphabetical. Unknown playtime (Epic) sorts last.
+const SORTS = {
+  name: null,
+  recent: (a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0),
+  playtime: (a, b) => (b.playtime ?? -1) - (a.playtime ?? -1),
+  installed: (a, b) => b.installed - a.installed,
+};
+
 // ---------- details window ----------
 // Opens instantly with what the scan knows; the description fills in when it arrives.
 async function openDetails(g) {
@@ -52,7 +75,10 @@ async function openDetails(g) {
 
   const d = await window.library.details(g.id).catch(() => null);
   if (dlg.dataset.id !== g.id || !dlg.open) return;
+  const date = ms => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/ (\d{4})$/, ', $1');
   const facts = [
+    ['Playtime', g.playtime == null ? `Not tracked by ${STORES[g.store]}` : played(g) ? hoursLong(g.playtime) : 'Not played'],
+    ['Last played', g.lastPlayed && `${date(g.lastPlayed)} (${ago(g.lastPlayed)})`],
     ['Developer', d?.developers], ['Publisher', d?.publishers], ['Released', d?.released], ['Genres', d?.genres],
   ].filter(([, v]) => v?.length).map(([k, v]) => {
     const list = [].concat(v); // GOG can list every regional distributor as a publisher
@@ -72,7 +98,8 @@ const card = g => el('button', { className: 'card', title: `${g.title} (${STORES
   el('span', { className: 'meta' },
     el('span', { className: 'name', textContent: g.title }),
     g.installed ? el('span', { className: 'dot', title: 'Installed' }) : null,
-    el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })));
+    el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })),
+  el('span', { className: 'sub', textContent: playLine(g) }));
 
 const dupRow = d => el('div', { className: 'dup' },
   cover(d.games.find(g => g.cover) ?? d.games[0]),
@@ -93,6 +120,7 @@ function render() {
       textContent: errors[s] ? `${name}: not found` : `${name} ${games.filter(g => g.store === s).length}` })));
   $('dup-count').textContent = duplicates.length;
   $('tab-library').setAttribute('aria-selected', state.tab === 'library');
+  $('sort').disabled = state.tab !== 'library'; // the Duplicates list is always A–Z
   $('tab-dups').setAttribute('aria-selected', state.tab === 'dups');
 
   const q = state.q.trim().toLowerCase();
@@ -102,6 +130,7 @@ function render() {
 
   if (state.tab === 'library') {
     const list = games.filter(match);
+    if (SORTS[state.sort]) list.sort(SORTS[state.sort]);
     $('view').replaceChildren(...[errorNote, list.length
       ? el('div', { className: 'grid' }, ...list.map(card))
       : el('p', { className: 'empty', textContent: 'No games match.' })].filter(Boolean));
@@ -140,6 +169,12 @@ $('tab-library').onclick = () => { state.tab = 'library'; if (data) render(); };
 $('tab-dups').onclick = () => { state.tab = 'dups'; if (data) render(); };
 $('q').oninput = e => { state.q = e.target.value; if (data) render(); };
 $('installed').onchange = e => { state.installed = e.target.checked; if (data) render(); };
+$('sort').value = state.sort;
+$('sort').onchange = e => {
+  state.sort = e.target.value;
+  try { localStorage.sort = state.sort; } catch { /* storage unavailable: just not remembered */ }
+  if (data) render();
+};
 $('rescan').onclick = load;
 $('details-close').onclick = () => $('details').close();
 $('details').onclick = e => { if (e.target === $('details')) $('details').close(); }; // click on the backdrop
