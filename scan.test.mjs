@@ -4,6 +4,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { normalize, findDuplicates, dedupeWithinStores, parseLoginUsers, uriLaunch, gogLaunch, parseAppInfo } from './scan.mjs';
+import { plainText, exactHit } from './details.mjs';
+
+test('Steam description text: tags stripped, entities decoded, junk left alone', () => {
+  assert.equal(plainText('Rock &amp; roll &quot;hero&quot; &#39;s <b>best</b> &#x2014; ever'), `Rock & roll "hero" 's best — ever`);
+  assert.equal(plainText('&#99999999; &bogus; ok'), '&#99999999; &bogus; ok'); // out-of-range / unknown: kept as text
+  assert.equal(plainText('<br>'), undefined);
+  assert.equal(plainText(null), undefined);
+});
+
+test('Steam search uses the exact game, not the first hit', () => {
+  const items = [{ id: 3603000, name: 'Maneater 2' }, { id: 629820, name: 'Maneater' }];
+  assert.equal(exactHit(items, 'Maneater').id, 629820);
+  assert.equal(exactHit(items, 'Maneater™').id, 629820);
+  assert.equal(exactHit(items, 'Hogwarts Legacy Creator Kit'), undefined);
+  assert.equal(exactHit(undefined, 'x'), undefined);
+});
 
 // Minimal appinfo.vdf v29 writer: header, entries (appid, size, 60-byte header, binary KeyValues), string table.
 function appInfoFile(apps) {

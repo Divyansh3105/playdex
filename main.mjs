@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { scanAll } from './scan.mjs';
+import { gameDetails } from './details.mjs';
 
 const ORIGIN = 'app://playdex/';
 const PUBLIC = new URL('./public/', import.meta.url);
@@ -12,6 +13,7 @@ const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/ja
 const CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https:; base-uri 'none'; form-action 'none'";
 
 let launches = new Map(); // game id -> argv built and validated by scan.mjs, from the last scan
+let games = new Map();    // game id -> game, from the last scan (details are only served for these)
 let scanning = null;      // one scan at a time; parallel calls share it
 
 // A real origin (instead of file://) so 'self' in the CSP means exactly our two files.
@@ -37,6 +39,7 @@ app.whenReady().then(() => {
     scanning ??= scanAll(app.getPath('userData')).finally(() => { scanning = null; });
     const result = await scanning;
     launches = new Map(result.games.map(g => [g.id, g.launch]));
+    games = new Map(result.games.map(g => [g.id, g]));
     // Launch commands stay in this process; the page only ever sends back a game id.
     return JSON.parse(JSON.stringify(result, (k, v) => (k === 'launch' ? undefined : v)));
   });
@@ -49,6 +52,12 @@ app.whenReady().then(() => {
       .on('error', err => console.error('Launch failed:', err.message)) // missing exe must not crash the app
       .unref();
     return true;
+  });
+
+  ipcMain.handle('details', (e, id) => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    const game = games.get(id);
+    return game ? gameDetails(game) : null;
   });
 
   // Show config.json in Explorer (creating an empty one first) so users can paste a Steam API key.

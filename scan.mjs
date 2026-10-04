@@ -215,7 +215,11 @@ function scanEpic() {
     })
     .map(i => {
       const img = ['DieselGameBoxTall', 'DieselGameBox', 'Thumbnail'].map(t => i.keyImages?.find(k => k.type === t)).find(Boolean);
+      // Same "?" damage inside words: "You?re" -> "You’re". Many entries only repeat the title; skip those.
+      const description = i.description?.replace(/(?<=\w)\?(?=\w)/g, '’').replace(/(?<=\w)\?(?=[\s:.,]|$)/g, '');
       return {
+        info: { description: description && description !== i.title ? description : undefined,
+          developers: i.developer ? [i.developer] : undefined },
         // Epic's cache stores ™/® as a literal "?" ("Apex Legends?"), so drop "?" glued to the end of a word
         // ponytail: also eats a real trailing "?" in a title; rare enough to ignore
         id: `epic:${i.id}`, store: 'epic', title: i.title.replace(/(?<=\w)\?(?=[\s:]|$)/g, ''), installed: installed.has(i.id),
@@ -248,13 +252,22 @@ function scanGog() {
       .map(r => [`gog_${r.productId}`, r.installationPath]));
     // Galaxy's own flags decide what its "Owned games" list shows: no DLC, nothing it hides (Amazon Prime/Luna
     // claim stubs, bundle entries, superseded releases like "Ultimate DOOM, The"). Same count as Galaxy.
-    return db.prepare(`select lr.releaseKey as key, ${piece('title')} as title, ${piece('originalImages')} as images
+    // Optional pieces: a malformed one (the DB is writable by other users) must not break the whole scan.
+    const json = s => { try { return JSON.parse(s) ?? {}; } catch { return {}; } };
+    return db.prepare(`select lr.releaseKey as key, ${piece('title')} as title, ${piece('originalImages')} as images,
+      ${piece('summary')} as summary, ${piece('meta')} as meta
       from (select distinct l.releaseKey from LibraryReleases l join ReleaseProperties p on p.releaseKey = l.releaseKey
             where l.releaseKey like 'gog_%' and p.isDlc = 0 and p.isVisibleInLibrary = 1) lr`).all()
       .filter(r => r.title)
       .map(r => ({
         id: `gog:${r.key}`, store: 'gog', title: JSON.parse(r.title).title, installed: installed.has(r.key),
-        cover: JSON.parse(r.images ?? '{}').verticalCover ?? undefined,
+        cover: json(r.images).verticalCover ?? undefined,
+        info: (({ developers, publishers, genres, releaseDate }) => ({
+          description: json(r.summary).summary || undefined, developers, publishers, genres,
+          released: releaseDate // same style as Steam's dates: "23 Mar, 2000"
+            ? new Date(releaseDate * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/ (\d{4})$/, ', $1')
+            : undefined,
+        }))(json(r.meta)),
         // installed: run it directly; otherwise (or if the install looks wrong) open its page in Galaxy to install
         launch: (installed.has(r.key) && gogLaunch(exe, r.key.slice(4), installed.get(r.key)))
           || uriLaunch(`goggalaxy://openGameView/${r.key}`),

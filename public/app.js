@@ -17,6 +17,7 @@ function toast(msg) {
 }
 
 async function launch(g) {
+  $('details').close(); // toasts can't show above an open modal
   const ok = await window.library.launch(g.id);
   toast(ok ? `Opening ${g.title} in ${STORES[g.store]}…` : 'Could not launch. Try Rescan.');
 }
@@ -31,9 +32,42 @@ function cover(g) {
 
 const actionLabel = g => g.installed ? '▶ Play' : g.store === 'gog' ? 'Open in GOG Galaxy' : '⬇ Install';
 
-const card = g => el('button', { className: 'card', title: `${g.title} (${STORES[g.store]})`, onclick: () => launch(g) },
+// ---------- details window ----------
+// Opens instantly with what the scan knows; the description fills in when it arrives.
+async function openDetails(g) {
+  const dlg = $('details');
+  dlg.dataset.id = g.id; // a slow answer for a game you've since closed must not overwrite the current one
+  const copies = data.games.filter(x => x.key === g.key); // same game on other stores
+  const body = el('div', { className: 'body' }, el('p', { className: 'loading', textContent: 'Loading details…' }));
+  $('details-content').replaceChildren(
+    el('div', { className: 'art' }, cover(g)),
+    el('div', { className: 'info' },
+      el('h2', { id: 'details-title', textContent: g.title }),
+      el('div', { className: 'stores' }, ...copies.map(c => el('button', {
+        className: `play ${c.store}`, textContent: `${actionLabel(c)} · ${STORES[c.store]}`, onclick: () => launch(c),
+      }))),
+      body));
+  if (!dlg.open) dlg.showModal();
+
+  const d = await window.library.details(g.id).catch(() => null);
+  if (dlg.dataset.id !== g.id || !dlg.open) return;
+  const facts = [
+    ['Developer', d?.developers], ['Publisher', d?.publishers], ['Released', d?.released], ['Genres', d?.genres],
+  ].filter(([, v]) => v?.length).map(([k, v]) => {
+    const list = [].concat(v); // GOG can list every regional distributor as a publisher
+    const text = list.slice(0, 3).join(', ') + (list.length > 3 ? ` +${list.length - 3} more` : '');
+    return el('div', {}, el('dt', { textContent: k }), el('dd', { textContent: text, title: list.join(', ') }));
+  });
+  body.replaceChildren(...[
+    facts.length ? el('dl', {}, ...facts) : null,
+    el('p', { className: 'desc', textContent: d?.description ?? (d?.offline ? 'Could not load a description (offline?).' : 'No description available.') }),
+    d?.source ? el('p', { className: 'source', textContent: d.source }) : null,
+  ].filter(Boolean));
+}
+
+const card = g => el('button', { className: 'card', title: `${g.title} (${STORES[g.store]})`, onclick: () => openDetails(g) },
   cover(g),
-  el('span', { className: 'action', textContent: actionLabel(g) }),
+  el('span', { className: 'action', textContent: 'Details' }),
   el('span', { className: 'meta' },
     el('span', { className: 'name', textContent: g.title }),
     g.installed ? el('span', { className: 'dot', title: 'Installed' }) : null,
@@ -42,7 +76,7 @@ const card = g => el('button', { className: 'card', title: `${g.title} (${STORES
 const dupRow = d => el('div', { className: 'dup' },
   cover(d.games.find(g => g.cover) ?? d.games[0]),
   el('div', {},
-    el('h3', { textContent: d.title }),
+    el('h3', {}, el('button', { className: 'link', textContent: d.title, title: 'Show details', onclick: () => openDetails(d.games[0]) })),
     el('div', { className: 'stores' }, ...d.games.map(g => el('button', {
       className: `badge ${g.store}${g.installed ? ' installed' : ''}`,
       title: `${actionLabel(g)} via ${STORES[g.store]}`,
@@ -106,6 +140,8 @@ $('tab-dups').onclick = () => { state.tab = 'dups'; if (data) render(); };
 $('q').oninput = e => { state.q = e.target.value; if (data) render(); };
 $('installed').onchange = e => { state.installed = e.target.checked; if (data) render(); };
 $('rescan').onclick = load;
+$('details-close').onclick = () => $('details').close();
+$('details').onclick = e => { if (e.target === $('details')) $('details').close(); }; // click on the backdrop
 $('settings').onclick = () => {
   window.library.openSettings();
   toast('Add your Steam API key to config.json, save it, then click Rescan.');

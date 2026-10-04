@@ -69,6 +69,28 @@
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
            background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; transition: .2s; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .link { all: unset; cursor: pointer; } .link:hover { text-decoration: underline; }
+  .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #details { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow: auto;
+             color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  #details::backdrop { background: #000a; backdrop-filter: blur(3px); }
+  #details-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 8px;
+                   background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+  #details-close:hover { background: var(--line); color: var(--text); }
+  #details-content { display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 24px; }
+  #details .art img, #details .art .ph { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+  #details h2 { margin: 0 40px 14px 0; font-size: 22px; line-height: 1.25; }
+  #details .stores { margin-bottom: 18px; }
+  .play { border: 1px solid currentColor; background: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .play.steam { color: var(--steam); } .play.epic { color: var(--epic); } .play.gog { color: var(--gog); }
+  .play:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+  #details dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 16px; }
+  #details dt { color: var(--muted); } #details dd { margin: 0; }
+  #details .desc { margin: 0; line-height: 1.6; color: #c9cedb; white-space: pre-line; }
+  #details .loading, #details .source { color: var(--muted); font-size: 13px; }
+  #details .source { margin: 12px 0 0; }
+  @media (max-width: 640px) { #details-content { grid-template-columns: 1fr; } #details .art { max-width: 180px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -90,6 +112,10 @@
 </nav>
 <main id="view"></main>
 <div id="toast" role="status"></div>
+<dialog id="details" aria-labelledby="details-title">
+  <button id="details-close" aria-label="Close">×</button>
+  <div id="details-content"></div>
+</dialog>
 
 <script src="app.js"></script>
 </body>

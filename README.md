@@ -47,9 +47,21 @@ Your Steam ID is read from Steam's `config/loginusers.vdf`. To use a different a
 `config.json` is git-ignored. Don't share the key, because it acts on your behalf with the Steam Web API.
 If the key fails, the app falls back to the local cache and shows why.
 
+## Game details
+
+Clicking a game opens its details: description, developer, publisher, release date and genres, with a
+Play/Install button for every store you own it on.
+
+- GOG: all from Galaxy's local database, offline.
+- Steam: fetched from the Steam store when you open the game.
+- Epic: Epic's local description when it has a real one; otherwise the Steam store page of the same game
+  (exact title match only, and labelled as such).
+
+Opening details sends that game's Steam app id or title to `store.steampowered.com`; nothing else leaves your PC.
+
 ## Launching
 
-Clicking a game opens it through its own launcher (`steam://`, `com.epicgames.launcher://`).
+The buttons in the details window open the game through its own launcher (`steam://`, `com.epicgames.launcher://`).
 Installed GOG games start directly via `GalaxyClient.exe /command=runGame`, which keeps cloud saves and playtime.
 Uninstalled ones open their page in Galaxy.
 
