@@ -124,18 +124,37 @@ export function parseAppInfo(buf, wanted) {
   return apps;
 }
 
+/** appid -> { size (bytes), dir } for every app installed in any Steam library folder. */
 function steamInstalled(root) {
   const vdf = fs.readFileSync(path.join(root, 'steamapps/libraryfolders.vdf'), 'utf8');
-  const installed = new Map(); // appid -> name
+  const installed = new Map();
   for (const [, lib] of vdf.matchAll(/"path"\s+"([^"]+)"/g)) {
     const dir = path.join(lib.replace(/\\\\/g, '\\'), 'steamapps');
     if (!fs.existsSync(dir)) continue;
     for (const f of fs.readdirSync(dir).filter(f => /^appmanifest_\d+\.acf$/.test(f))) {
-      const acf = fs.readFileSync(path.join(dir, f), 'utf8');
-      installed.set(acf.match(/"appid"\s+"(\d+)"/)[1], acf.match(/"name"\s+"([^"]+)"/)?.[1]);
+      const app = vdfGet(parseVdf(fs.readFileSync(path.join(dir, f), 'utf8')), 'AppState') ?? {};
+      const appid = vdfGet(app, 'appid');
+      if (!/^\d+$/.test(appid ?? '')) continue;
+      installed.set(appid, { size: bytes(vdfGet(app, 'SizeOnDisk')), dir: path.join(dir, 'common', String(vdfGet(app, 'installdir') ?? '')) });
     }
   }
   return installed;
+}
+
+const bytes = v => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : undefined);
+
+/** Drive root ("D:\") of an install folder, for the disk space view. */
+const driveOf = dir => (typeof dir === 'string' && path.isAbsolute(dir) ? path.parse(dir).root : undefined);
+
+/** Total size of the files under a folder (GOG doesn't record install sizes). undefined if unreadable. */
+function folderSize(dir) {
+  try {
+    let total = 0;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+      if (e.isFile()) total += fs.statSync(path.join(e.parentPath, e.name)).size;
+    }
+    return total;
+  } catch { return undefined; }
 }
 
 // Steam ID of the most recently logged-in account in config/loginusers.vdf (first one if none is marked).
@@ -226,6 +245,7 @@ async function scanSteam(notes, root) {
   const art = `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps`;
   return [...owned].map(([id, title]) => ({
     id: `steam:${id}`, store: 'steam', title, installed: installed.has(id),
+    size: installed.get(id)?.size, drive: driveOf(installed.get(id)?.dir),
     playtime: times ? (times.get(id)?.playtime ?? 0) : null, lastPlayed: times?.get(id)?.lastPlayed,
     cover: `${art}/${id}/library_600x900.jpg`,
     fallback: `${art}/${id}/header.jpg`,
@@ -236,11 +256,12 @@ async function scanSteam(notes, root) {
 // ---------- Epic ----------
 
 function scanEpic(notes, base) {
-  const installed = new Set();
+  const installed = new Map(); // catalog item id -> { size, dir }
   const manifests = path.join(base, 'Manifests');
   if (fs.existsSync(manifests)) {
     for (const f of fs.readdirSync(manifests).filter(f => f.endsWith('.item'))) {
-      installed.add(JSON.parse(fs.readFileSync(path.join(manifests, f), 'utf8')).CatalogItemId);
+      const m = JSON.parse(fs.readFileSync(path.join(manifests, f), 'utf8'));
+      installed.set(m.CatalogItemId, { size: bytes(m.InstallSize), dir: m.InstallLocation });
     }
   }
   // catcache.bin = base64 JSON of the catalog entries for your library
@@ -262,6 +283,7 @@ function scanEpic(notes, base) {
         // Epic's cache stores ™/® as a literal "?" ("Apex Legends?"), so drop "?" glued to the end of a word
         // ponytail: also eats a real trailing "?" in a title; rare enough to ignore
         id: `epic:${i.id}`, store: 'epic', title: i.title.replace(/(?<=\w)\?(?=[\s:]|$)/g, ''), installed: installed.has(i.id),
+        size: installed.get(i.id)?.size, drive: driveOf(installed.get(i.id)?.dir),
         playtime: null, // Epic keeps playtime only in its encrypted account data
         cover: img && `${img.url}?w=360&h=480&resize=1`,
         launch: uriLaunch(`com.epicgames.launcher://apps/${i.namespace}%3A${i.id}%3A${i.releaseInfo?.[0]?.appId}?action=launch&silent=true`),
@@ -297,8 +319,13 @@ function scanGog(notes, src, galaxyExe) {
       from (select distinct l.releaseKey from LibraryReleases l join ReleaseProperties p on p.releaseKey = l.releaseKey
             where l.releaseKey like 'gog_%' and p.isDlc = 0 and p.isVisibleInLibrary = 1) lr`).all()
       .filter(r => r.title)
-      .map(r => ({
+      .map(r => {
+        // Size only for a folder that passes the launch check: a tampered path can't make us walk a whole drive.
+        const dir = installed.get(r.key);
+        const verified = dir != null && gogLaunch('x', r.key.slice(4), dir) != null;
+        return {
         id: `gog:${r.key}`, store: 'gog', title: JSON.parse(r.title).title, installed: installed.has(r.key),
+        size: verified ? folderSize(dir) : undefined, drive: verified ? driveOf(dir) : undefined,
         playtime: Number.isFinite(r.minutes) && r.minutes > 0 ? r.minutes : 0,
         // "2024-12-15 07:22:03" (UTC); unparseable -> unknown
         lastPlayed: Date.parse(String(r.lastPlayed ?? '').replace(' ', 'T') + 'Z') || undefined,
@@ -312,7 +339,8 @@ function scanGog(notes, src, galaxyExe) {
         // installed: run it directly; otherwise (or if the install looks wrong) open its page in Galaxy to install
         launch: (installed.has(r.key) && gogLaunch(exe, r.key.slice(4), installed.get(r.key)))
           || uriLaunch(`goggalaxy://openGameView/${r.key}`),
-      }));
+        };
+      });
   } finally { db.close(); }
 }
 
@@ -343,5 +371,10 @@ export async function scanAll(dir, paths = defaultPaths()) {
   }
   for (const g of games) g.key = normalize(g.title);
   const unique = dedupeWithinStores(games).sort((a, b) => a.title.localeCompare(b.title));
-  return { games: unique, duplicates: findDuplicates(unique), errors, notes };
+  // Free space for each drive that has installed games.
+  const drives = [...new Set(unique.map(g => g.installed && g.drive).filter(Boolean))].sort().map(root => {
+    try { const s = fs.statfsSync(root); return { root, free: s.bavail * s.bsize, total: s.blocks * s.bsize }; }
+    catch { return { root }; }
+  });
+  return { games: unique, duplicates: findDuplicates(unique), drives, errors, notes };
 }

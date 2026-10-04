@@ -50,6 +50,7 @@ makeGog(paths.gog, [
   { key: 'gog_5', title: 'Mafia II' },
   { key: 'gog_6', title: 'Mafia II' },                               // same title twice in one store: counts once
   { key: 'gog_7', title: 'Mafia II (Classic)' },                     // a different product: counts
+  { key: 'gog_8', title: 'Moved Game', installDir: tmp },            // folder without goggame-8.info: not verified
 ]);
 
 const result = await scanAll(path.join(tmp, 'appdata'), paths);
@@ -73,7 +74,22 @@ test('Epic: games and creator kits; no DLC, Unreal Engine or Twinmotion; "?" dam
 });
 
 test('GOG: Galaxy\'s own DLC/visibility flags; same title counted once; different editions kept', () => {
-  assert.deepEqual(titles('gog'), ['Fallout', 'Mafia II', 'Mafia II (Classic)']);
+  assert.deepEqual(titles('gog'), ['Fallout', 'Mafia II', 'Mafia II (Classic)', 'Moved Game']);
+});
+
+test('install sizes and drives', () => {
+  const root = path.parse(tmp).root;
+  assert.equal(find('Half Game').size, 5e9);       // Steam: SizeOnDisk
+  assert.equal(find('Apex Legends').size, 7e9);    // Epic: InstallSize
+  assert.equal(find('Fallout').size, 4096 + 2);    // GOG: sum of the files in the install folder
+  assert.equal(find('Half Game').drive, root);
+  assert.equal(find('Mafia II').size, undefined);  // not installed
+  // A GOG path that fails the install check is never walked or measured
+  assert.equal(find('Moved Game').installed, true);
+  assert.equal(find('Moved Game').size, undefined);
+  assert.equal(find('Moved Game').drive, undefined);
+  assert.deepEqual(result.drives.map(d => d.root), [root]);
+  assert.ok(result.drives[0].free > 0 && result.drives[0].total >= result.drives[0].free);
 });
 
 test('installed state and launch commands', () => {
@@ -108,7 +124,7 @@ test('a missing launcher only affects its own store', async () => {
   const r = await scanAll(path.join(tmp, 'appdata'), { ...paths, epic: path.join(tmp, 'nope') });
   assert.ok(r.errors.epic);
   assert.equal(r.games.filter(g => g.store === 'steam').length, 4);
-  assert.equal(r.games.filter(g => g.store === 'gog').length, 3);
+  assert.equal(r.games.filter(g => g.store === 'gog').length, 4);
 });
 
 test('a broken config.json is reported and ignored', async () => {

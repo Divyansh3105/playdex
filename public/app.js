@@ -79,6 +79,7 @@ async function openDetails(g) {
   const facts = [
     ['Playtime', g.playtime == null ? `Not tracked by ${STORES[g.store]}` : played(g) ? hoursLong(g.playtime) : 'Not played'],
     ['Last played', g.lastPlayed && `${date(g.lastPlayed)} (${ago(g.lastPlayed)})`],
+    ['Size on disk', g.installed && `${fmtBytes(g.size)}${g.drive ? ` on ${g.drive}` : ''}`],
     ['Developer', d?.developers], ['Publisher', d?.publishers], ['Released', d?.released], ['Genres', d?.genres],
   ].filter(([, v]) => v?.length).map(([k, v]) => {
     const list = [].concat(v); // GOG can list every regional distributor as a publisher
@@ -112,6 +113,59 @@ const dupRow = d => el('div', { className: 'dup' },
       onclick: () => launch(g),
     })))));
 
+// ---------- disk space ----------
+// Binary units, like Windows Explorer, so drive numbers match what Windows shows.
+const fmtBytes = b => (b == null ? 'size unknown' : b >= 2 ** 40 ? `${(b / 2 ** 40).toFixed(2)} TB`
+  : b >= 2 ** 30 ? `${(b / 2 ** 30).toFixed(1)} GB` : `${b > 0 ? Math.max(1, Math.round(b / 2 ** 20)) : 0} MB`);
+const sum = list => list.reduce((t, g) => t + (g.size ?? 0), 0);
+const bar = (...parts) => el('div', { className: 'bar' }, // parts: [className, fraction 0..1, tooltip]
+  ...parts.map(([cls, f, tip]) => { const s = el('span', { className: cls, title: tip }); s.style.width = `${Math.max(0, Math.min(1, f)) * 100}%`; return s; }));
+
+function diskView(match) {
+  const { games, drives } = data;
+  const installed = games.filter(g => g.installed);
+  const shown = installed.filter(match).sort((a, b) => (b.size ?? -1) - (a.size ?? -1));
+  if (!installed.length) return [el('p', { className: 'empty', textContent: 'No installed games found.' })];
+
+  const driveCards = drives.map(d => {
+    const ours = sum(installed.filter(g => g.drive === d.root));
+    if (!d.total) return el('div', { className: 'drive' }, el('strong', { textContent: d.root }), ` Playdex games: ${fmtBytes(ours)}`);
+    // Recorded install sizes can exceed what's really used (stale records, compressed folders): clamp.
+    const used = d.total - d.free, games = Math.min(ours, used), other = used - games;
+    return el('div', { className: 'drive' },
+      el('div', { className: 'drive-head' }, el('strong', { textContent: d.root }),
+        el('span', { textContent: `${fmtBytes(d.free)} free of ${fmtBytes(d.total)}` })),
+      bar(['games', games / d.total, `Games: ${fmtBytes(ours)}`], ['other', other / d.total, `Everything else: ${fmtBytes(other)}`]),
+      el('div', { className: 'legend' }, el('span', { className: 'key games' }), `Games ${fmtBytes(ours)}`,
+        el('span', { className: 'key other' }), `Everything else ${fmtBytes(other)}`, el('span', { className: 'key free' }), 'Free'));
+  });
+
+  // The same game installed from two stores: an easy way to get space back.
+  const twice = [...Map.groupBy(installed, g => g.key).values()].filter(l => l.length > 1).map(l => {
+    const copies = l.toSorted(byStore);
+    return el('p', { className: 'warn' }, el('strong', { textContent: copies[0].title }),
+      ` is installed from ${copies.map(g => `${STORES[g.store]} (${fmtBytes(g.size)})`).join(' and ')}. `
+      + `Removing one copy frees about ${fmtBytes(Math.min(...copies.map(g => g.size ?? 0)))}.`);
+  });
+
+  const totals = Object.entries(STORES).map(([s, name]) => [name, installed.filter(g => g.store === s)]).filter(([, l]) => l.length)
+    .map(([name, l]) => `${name} ${fmtBytes(sum(l))} (${l.length} game${l.length > 1 ? 's' : ''})`).join(' · ');
+  const max = Math.max(1, ...shown.map(g => g.size ?? 0));
+  const row = g => el('button', { className: 'diskrow', title: 'Show details', onclick: () => openDetails(g) },
+    cover(g),
+    el('span', { className: 'title' }, el('span', { textContent: g.title }), el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })),
+    bar(['games', (g.size ?? 0) / max]),
+    el('span', { className: 'size', textContent: fmtBytes(g.size) }),
+    el('span', { className: 'where', textContent: g.drive ?? '' }));
+
+  return [
+    el('div', { className: 'drives' }, ...driveCards),
+    ...twice,
+    el('p', { className: 'hint', textContent: `Installed: ${fmtBytes(sum(installed))} in ${installed.length} games — ${totals}` }),
+    shown.length ? el('div', { className: 'disklist' }, ...shown.map(row)) : el('p', { className: 'empty', textContent: 'No installed games match.' }),
+  ];
+}
+
 function render() {
   const { games, duplicates, errors, notes } = data;
   // A game owned on two stores counts once in the total, and once in each store's badge.
@@ -119,9 +173,9 @@ function render() {
     el('span', { className: `badge ${s}`, title: errors[s] ?? '',
       textContent: errors[s] ? `${name}: not found` : `${name} ${games.filter(g => g.store === s).length}` })));
   $('dup-count').textContent = duplicates.length;
-  $('tab-library').setAttribute('aria-selected', state.tab === 'library');
-  $('sort').disabled = state.tab !== 'library'; // the Duplicates list is always A–Z
-  $('tab-dups').setAttribute('aria-selected', state.tab === 'dups');
+  for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
+  $('sort').disabled = state.tab !== 'library';        // Duplicates is A–Z, Disk space is largest first
+  $('installed').disabled = state.tab === 'disk';      // Disk space only lists installed games anyway
 
   const q = state.q.trim().toLowerCase();
   const match = g => state.stores.has(g.store) && (!state.installed || g.installed) && g.title.toLowerCase().includes(q);
@@ -134,6 +188,8 @@ function render() {
     $('view').replaceChildren(...[errorNote, list.length
       ? el('div', { className: 'grid' }, ...list.map(card))
       : el('p', { className: 'empty', textContent: 'No games match.' })].filter(Boolean));
+  } else if (state.tab === 'disk') {
+    $('view').replaceChildren(...[errorNote, ...diskView(g => state.stores.has(g.store) && g.title.toLowerCase().includes(q))].filter(Boolean));
   } else {
     const list = duplicates.filter(d => d.games.some(match));
     $('view').replaceChildren(
@@ -165,8 +221,7 @@ for (const [s, name] of Object.entries(STORES)) {
   };
   $('chips').append(chip);
 }
-$('tab-library').onclick = () => { state.tab = 'library'; if (data) render(); };
-$('tab-dups').onclick = () => { state.tab = 'dups'; if (data) render(); };
+for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).onclick = () => { state.tab = t; if (data) render(); };
 $('q').oninput = e => { state.q = e.target.value; if (data) render(); };
 $('installed').onchange = e => { state.installed = e.target.checked; if (data) render(); };
 $('sort').value = state.sort;

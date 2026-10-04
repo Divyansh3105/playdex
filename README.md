@@ -67,6 +67,17 @@ The **Sort** menu orders the library by name, recently played, most played, or i
 | GOG | Galaxy's `GameTimes` and `LastPlayedDates` tables |
 | Epic | Not available: Epic keeps it only in its encrypted account data, so Epic games show no playtime |
 
+## Disk space
+
+The **Disk space** tab shows free space on each drive that has games, how much of it your games use, installed
+games largest first, and a warning when the same game is installed from two stores.
+
+| Store | Install size |
+|---|---|
+| Steam | `SizeOnDisk` in each `appmanifest_*.acf` |
+| Epic | `InstallSize` in each install manifest |
+| GOG | Galaxy doesn't record it: Playdex adds up the files in the install folder, but only after the folder passes the same `goggame-<id>.info` check used for launching |
+
 ## Game details
 
 Clicking a game opens its details: description, developer, publisher, release date and genres, with a
