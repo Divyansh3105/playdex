@@ -106,7 +106,11 @@ Uninstalled ones open their page in Galaxy.
 To sign, add a certificate to electron-builder (`win.signtoolOptions` or Azure Artifact Signing via `win.azureSignOptions`),
 then `npm run dist`. A signed installer passes Smart App Control and builds SmartScreen reputation over time.
 
-`npm test` covers title matching, de-duplication, Steam ID detection and launch validation.
+## Tests
+
+`npm test` runs unit tests (title matching, file parsers, launch validation) and scanner tests that build fake
+Steam, Epic and GOG data folders (`tests/fixtures.mjs`) with one entry per counting rule, so changes that would make
+Playdex's counts drift from the launchers' fail. GitHub Actions runs them on every push and pull request.
 
 ## License
 

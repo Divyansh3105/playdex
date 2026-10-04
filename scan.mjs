@@ -70,8 +70,6 @@ export function findDuplicates(games) {
 
 // ---------- Steam ----------
 
-const steamRoot = () => regValue('HKCU\\Software\\Valve\\Steam', 'SteamPath') ?? 'C:/Program Files (x86)/Steam';
-
 function readJson(file) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; }
   catch { return null; } // corrupt file
@@ -210,8 +208,7 @@ function steamPlaytimesFor(root, steamId) {
   return steamPlaytimes(fs.readFileSync(path.join(root, 'userdata', dir, 'config/localconfig.vdf'), 'utf8'));
 }
 
-async function scanSteam(notes) {
-  const root = steamRoot();
+async function scanSteam(notes, root) {
   const installed = steamInstalled(root);
   let config = readJson(dataFile('config.json'));
   if (!config) { notes.push('config.json is not valid JSON, so it was ignored.'); config = {}; }
@@ -238,8 +235,7 @@ async function scanSteam(notes) {
 
 // ---------- Epic ----------
 
-function scanEpic() {
-  const base = 'C:/ProgramData/Epic/EpicGamesLauncher/Data';
+function scanEpic(notes, base) {
   const installed = new Set();
   const manifests = path.join(base, 'Manifests');
   if (fs.existsSync(manifests)) {
@@ -275,8 +271,7 @@ function scanEpic() {
 
 // ---------- GOG ----------
 
-function scanGog() {
-  const src = 'C:/ProgramData/GOG.com/Galaxy/storage/galaxy-2.0.db';
+function scanGog(notes, src, galaxyExe) {
   if (!fs.existsSync(src)) throw new Error('GOG Galaxy not found');
   // Copy first: Galaxy keeps the live DB open, and SQLite on Windows fails on very long paths.
   const tmp = path.join(os.tmpdir(), 'playdex-gog');
@@ -288,9 +283,6 @@ function scanGog() {
   try {
     const piece = type => `(select value from GamePieces where releaseKey = lr.releaseKey
       and gamePieceTypeId = (select id from GamePieceTypes where type = '${type}'))`;
-    // HKLM is admin-only, so the Galaxy exe location is trusted (unlike the DB).
-    const galaxyDir = regValue('HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\GalaxyClient\\paths', 'client');
-    const galaxyExe = galaxyDir && path.join(galaxyDir, 'GalaxyClient.exe');
     const exe = galaxyExe && fs.existsSync(galaxyExe) ? galaxyExe : null;
     const installed = new Map(db.prepare('select productId, installationPath from InstalledBaseProducts').all()
       .map(r => [`gog_${r.productId}`, r.installationPath]));
@@ -326,11 +318,28 @@ function scanGog() {
 
 // ---------- all ----------
 
-export async function scanAll(dir) {
+/** Where each launcher keeps its data on this PC. Tests pass their own sample folders instead. */
+export function defaultPaths() {
+  const galaxyDir = regValue('HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\GalaxyClient\\paths', 'client');
+  return {
+    steam: regValue('HKCU\\Software\\Valve\\Steam', 'SteamPath') ?? 'C:/Program Files (x86)/Steam',
+    epic: 'C:/ProgramData/Epic/EpicGamesLauncher/Data',
+    gog: 'C:/ProgramData/GOG.com/Galaxy/storage/galaxy-2.0.db',
+    // HKLM is admin-only, so the Galaxy exe location is trusted (unlike Galaxy's database).
+    galaxyExe: galaxyDir && path.join(galaxyDir, 'GalaxyClient.exe'),
+  };
+}
+
+export async function scanAll(dir, paths = defaultPaths()) {
   dataDir = dir;
   const games = [], errors = {}, notes = [];
-  for (const [store, scan] of Object.entries({ steam: scanSteam, epic: scanEpic, gog: scanGog })) {
-    try { games.push(...await scan(notes)); } catch (e) { errors[store] = e.message; }
+  const scans = {
+    steam: () => scanSteam(notes, paths.steam),
+    epic: () => scanEpic(notes, paths.epic),
+    gog: () => scanGog(notes, paths.gog, paths.galaxyExe),
+  };
+  for (const [store, scan] of Object.entries(scans)) {
+    try { games.push(...await scan()); } catch (e) { errors[store] = e.message; }
   }
   for (const g of games) g.key = normalize(g.title);
   const unique = dedupeWithinStores(games).sort((a, b) => a.title.localeCompare(b.title));

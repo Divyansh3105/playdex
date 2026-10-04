@@ -29,6 +29,7 @@ test('Steam playtime and last played from localconfig.vdf', () => {
   assert.equal(steamPlaytimes('').size, 0);
 });
 import { plainText, exactHit } from './details.mjs';
+import { appInfoFile } from './tests/fixtures.mjs';
 
 test('Steam description text: tags stripped, entities decoded, junk left alone', () => {
   assert.equal(plainText('Rock &amp; roll &quot;hero&quot; &#39;s <b>best</b> &#x2014; ever'), `Rock & roll "hero" 's best — ever`);
@@ -44,27 +45,6 @@ test('Steam search uses the exact game, not the first hit', () => {
   assert.equal(exactHit(items, 'Hogwarts Legacy Creator Kit'), undefined);
   assert.equal(exactHit(undefined, 'x'), undefined);
 });
-
-// Minimal appinfo.vdf v29 writer: header, entries (appid, size, 60-byte header, binary KeyValues), string table.
-function appInfoFile(apps) {
-  const strings = ['appinfo', 'common', 'name', 'type', 'gameid'];
-  const u32 = n => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
-  const key = k => u32(strings.indexOf(k));
-  const str = (k, v) => Buffer.concat([Buffer.from([1]), key(k), Buffer.from(v + '\0')]);
-  const entries = apps.map(([id, name, type]) => {
-    const kv = Buffer.concat([
-      Buffer.from([0]), key('appinfo'), Buffer.from([0]), key('common'),
-      str('name', name), str('type', type), Buffer.from([2]), key('gameid'), u32(id), // int32 value, skipped
-      Buffer.from([8, 8, 8]),
-    ]);
-    return Buffer.concat([u32(id), u32(60 + kv.length), Buffer.alloc(60), kv]);
-  });
-  const body = Buffer.concat([...entries, u32(0)]);
-  const head = Buffer.alloc(16);
-  head.writeUInt32LE(0x07564429, 0); head.writeUInt32LE(1, 4); head.writeBigUInt64LE(BigInt(16 + body.length), 8);
-  const table = Buffer.concat([u32(strings.length), ...strings.map(s => Buffer.from(s + '\0'))]);
-  return Buffer.concat([head, body, table]);
-}
 
 test('reads name and type from Steam appinfo.vdf', () => {
   const buf = appInfoFile([[205930, 'Hitman: Sniper Challenge', 'Game'], [431960, 'Wallpaper Engine', 'Application'], [7, 'Steam Client', 'Config']]);
