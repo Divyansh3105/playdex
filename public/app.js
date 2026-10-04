@@ -3,6 +3,8 @@ const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STO
 const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), show: 'all', sort: 'name' };
 try { if (localStorage.sort in { name: 1, recent: 1, playtime: 1, installed: 1 }) state.sort = localStorage.sort; } catch { /* storage unavailable */ }
 let data = null;
+let playedKeys = new Set(); // keys of games played on any store, so a copy of a game you played elsewhere isn't "not played"
+let visible = [], lastPick = null; // the Library list on screen, for "What should I play?"
 
 // ---------- favorites, hidden, tags ----------
 // Saved by the main process (which validates them); keyed by game id, i.e. one store's copy.
@@ -24,6 +26,7 @@ function shown(g) {
   if (prefs.hidden.has(g.id)) return false;
   if (state.show === 'installed') return g.installed;
   if (state.show === 'favorites') return prefs.favorites.has(g.id);
+  if (state.show === 'unplayed') return notPlayed(g);
   if (state.show.startsWith('tag:')) return prefs.tags.get(g.id)?.includes(state.show.slice(4)) ?? false;
   return true;
 }
@@ -31,6 +34,7 @@ function shown(g) {
 function renderShowMenu() {
   const count = test => data.games.filter(test).length;
   const options = [['all', 'All games'], ['installed', `Installed (${count(g => g.installed)})`],
+    ['unplayed', `Not played (${count(g => notPlayed(g) && !prefs.hidden.has(g.id))})`],
     ['favorites', `Favorites (${count(g => prefs.favorites.has(g.id))})`], ['hidden', `Hidden (${count(g => prefs.hidden.has(g.id))})`]];
   const tags = allTags().map(t => [`tag:${t}`, `${t} (${count(g => prefs.tags.get(g.id)?.includes(t))})`]);
   if (![...options, ...tags].some(([v]) => v === state.show)) state.show = 'all'; // e.g. its last tag was removed
@@ -125,6 +129,7 @@ function ago(ms) {
   return rtf.format(Math.round(days / 365), 'year');
 }
 const played = g => g.playtime > 0 || g.lastPlayed;
+const notPlayed = g => g.playtime != null && !playedKeys.has(g.key); // Epic (unknown playtime) never counts as not played
 const playLine = g => g.playtime == null ? '' : !played(g) ? 'Not played' : [hours(g.playtime), g.lastPlayed && ago(g.lastPlayed)].filter(Boolean).join(' · ');
 
 // Scan order is A–Z, and sort() is stable, so ties stay alphabetical. Unknown playtime (Epic) sorts last.
@@ -256,7 +261,7 @@ function render() {
   $('dup-count').textContent = duplicates.length;
   for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
   // Sort and Show apply to the Library tab. Duplicates (A–Z) and Disk space (largest first) list every copy.
-  $('sort').disabled = $('show').disabled = state.tab !== 'library';
+  $('sort').disabled = $('show').disabled = $('pick').disabled = state.tab !== 'library';
   renderShowMenu();
 
   const q = state.q.trim().toLowerCase();
@@ -265,7 +270,7 @@ function render() {
   const errorNote = problems.length ? el('p', { className: 'errors', textContent: problems.join(' · ') }) : null;
 
   if (state.tab === 'library') {
-    const list = games.filter(g => match(g) && shown(g));
+    const list = visible = games.filter(g => match(g) && shown(g));
     if (SORTS[state.sort]) list.sort(SORTS[state.sort]);
     const empty = { favorites: 'No favorites yet. Open a game and click ☆ Favorite.', hidden: 'No hidden games.' }[state.show] ?? 'No games match.';
     $('view').replaceChildren(...[errorNote, list.length
@@ -289,6 +294,7 @@ async function load() {
   try {
     const [scan, saved] = await Promise.all([window.library.scan(), window.library.prefs().catch(() => null)]);
     data = scan;
+    playedKeys = new Set(scan.games.filter(played).map(g => g.key));
     if (saved) prefs = toPrefs(saved);
     else toast('Could not load your favorites and tags.');
     render();
@@ -315,6 +321,16 @@ $('sort').onchange = e => {
   state.sort = e.target.value;
   try { localStorage.sort = state.sort; } catch { /* storage unavailable: just not remembered */ }
   if (data) render();
+};
+// A random game from what the Library shows (filters, search, Show menu), installed ones first, not the last pick again.
+$('pick').onclick = () => {
+  const installed = visible.filter(g => g.installed);
+  let pool = installed.length ? installed : visible;
+  if (pool.length > 1) pool = pool.filter(g => g.id !== lastPick);
+  if (!pool.length) return toast('No games to pick from. Try another filter.');
+  const g = pool[Math.floor(Math.random() * pool.length)];
+  lastPick = g.id;
+  openDetails(g);
 };
 $('rescan').onclick = load;
 $('details-close').onclick = () => $('details').close();

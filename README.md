@@ -60,6 +60,9 @@ If the key fails, the app falls back to the local cache and shows why.
 
 Each card shows how long you've played and when you last played ("98 h · 9 months ago", or "Not played").
 The **Sort** menu orders the library by name, recently played, most played, or installed first, and remembers your choice.
+**Show → Not played** lists games you haven't played on any store (Epic games are left out, since their playtime is unknown).
+**🎲 What should I play?** opens a random game from the ones shown, preferring installed games. Pair it with Not played
+to work through your backlog.
 
 | Store | Playtime and last played |
 |---|---|
@@ -70,7 +73,7 @@ The **Sort** menu orders the library by name, recently played, most played, or i
 ## Favorites, hidden games and tags
 
 In a game's details window: **☆ Favorite**, **Hide from library**, and tags (type one and press Enter; existing
-tags are suggested). The **Show** menu filters the library to Installed, Favorites, Hidden, or any tag.
+tags are suggested). The **Show** menu filters the library to Installed, Not played, Favorites, Hidden, or any tag.
 
 - They apply per store copy, so you can hide the Epic copy of a game and keep the Steam one.
 - Hiding only affects the library view: the launcher counts in the header, Duplicates and Disk space still include everything.

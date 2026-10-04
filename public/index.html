@@ -34,8 +34,8 @@
   .chip.steam[aria-pressed="true"] { color: var(--steam); }
   .chip.epic[aria-pressed="true"] { color: var(--epic); }
   .chip.gog[aria-pressed="true"] { color: var(--gog); }
-  #sort, #show { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
-  #sort:disabled, #show:disabled { opacity: .45; cursor: default; }
+  #sort, #show, #pick { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+  #sort:disabled, #show:disabled, #pick:disabled { opacity: .45; cursor: default; }
   #sort option, #show option, #show optgroup { background: var(--panel); }
   .fav { color: #facc15; flex: none; }
 
@@ -154,6 +154,7 @@
     <option value="installed">Installed first</option>
   </select>
   <select id="show" aria-label="Show"><option value="all">All games</option></select>
+  <button id="pick" title="Opens a random game from the games shown, installed ones first">🎲 What should I play?</button>
   <button id="rescan">Rescan</button>
   <button id="settings" title="Opens config.json, where you can add a Steam Web API key for an exact Steam library">Settings</button>
 </nav>
