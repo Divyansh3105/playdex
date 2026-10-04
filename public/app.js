@@ -1,4 +1,5 @@
 const STORES = { steam: 'Steam', epic: 'Epic', gog: 'GOG' };
+const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STORES).indexOf(b.store); // always Steam, Epic, GOG
 const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), installed: false };
 let data = null;
 
@@ -37,7 +38,7 @@ const actionLabel = g => g.installed ? '▶ Play' : g.store === 'gog' ? 'Open in
 async function openDetails(g) {
   const dlg = $('details');
   dlg.dataset.id = g.id; // a slow answer for a game you've since closed must not overwrite the current one
-  const copies = data.games.filter(x => x.key === g.key); // same game on other stores
+  const copies = data.games.filter(x => x.key === g.key).sort(byStore); // same game on other stores
   const body = el('div', { className: 'body' }, el('p', { className: 'loading', textContent: 'Loading details…' }));
   $('details-content').replaceChildren(
     el('div', { className: 'art' }, cover(g)),
@@ -77,7 +78,7 @@ const dupRow = d => el('div', { className: 'dup' },
   cover(d.games.find(g => g.cover) ?? d.games[0]),
   el('div', {},
     el('h3', {}, el('button', { className: 'link', textContent: d.title, title: 'Show details', onclick: () => openDetails(d.games[0]) })),
-    el('div', { className: 'stores' }, ...d.games.map(g => el('button', {
+    el('div', { className: 'stores' }, ...d.games.toSorted(byStore).map(g => el('button', {
       className: `badge ${g.store}${g.installed ? ' installed' : ''}`,
       title: `${actionLabel(g)} via ${STORES[g.store]}`,
       textContent: STORES[g.store] + (g.installed ? ' · installed' : ''),

@@ -57,6 +57,7 @@
 
   .hint { color: var(--muted); margin: 0 0 16px; }
   .dups { display: grid; gap: 10px; max-width: 760px; }
+  @media (min-width: 1000px) { .dups { grid-template-columns: 1fr 1fr; max-width: 1240px; } } /* two columns on wide windows */
   .dup { display: flex; gap: 14px; align-items: center; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
   .dup img, .dup .ph { width: 48px; flex: none; font-size: 10px; padding: 2px; border-radius: 5px; }
   .dup h3 { margin: 0 0 6px; font-size: 15px; }
