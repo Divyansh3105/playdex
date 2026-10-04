@@ -1,12 +1,30 @@
 # Playdex
 
-A desktop app (Electron) that shows all your Steam, Epic and GOG games in one place, and finds games you own on more than one store.
+[![Tests](https://github.com/Divyansh3105/playdex/actions/workflows/tests.yml/badge.svg)](https://github.com/Divyansh3105/playdex/actions/workflows/tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/Divyansh3105/playdex)](https://github.com/Divyansh3105/playdex/releases/latest)
 
-![Playdex library: every Steam, Epic and GOG game in one cover grid, with store badges and per-store counts](docs/screenshot-library.jpg)
+**All your Steam, Epic and GOG games in one place.**
 
-![Duplicates tab: the 12 games owned on more than one store, each with a button per store](docs/screenshot-duplicates.jpg)
+My games are spread across three launchers. Whenever I wanted to play something, I had to open Steam, then Epic,
+then GOG Galaxy, searching each one because I couldn't remember which store had it. Sometimes it turned out I owned
+the same game on two of them. Playdex reads every launcher's data on your PC and shows the whole library in one
+window: search it once, launch any game through its own store, and see what you own twice.
 
-![Game details: description, developer, release date and genres, with an Install button for each store that owns the game](docs/screenshot-details.jpg)
+![Demo: the library, the Not played filter, What should I play?, the Stats tab and the Disk space tab](docs/demo.gif)
+
+## Features
+
+- **One library** across Steam, Epic and GOG: no logins, no API keys, nothing uploaded. Counts match each launcher's own.
+- **Duplicates:** games you own on more than one store.
+- **Playtime and last played** (Steam and GOG), a **Not played** filter, and **🎲 What should I play?** for the backlog.
+- **Stats:** totals, hours played, the share of your library you've played, and your most played games.
+- **Disk space:** free space per drive, games largest first, and **Uninstall…** through the game's own store.
+- **Favorites, hidden games and tags**, **Export** to CSV or JSON, **auto-refresh** and **keyboard shortcuts**.
+
+## Download
+
+Get the installer from the [latest release](https://github.com/Divyansh3105/playdex/releases/latest) (Windows),
+or run from source:
 
 ```
 npm install
@@ -23,6 +41,33 @@ Settings live in `%APPDATA%\Playdex` and are kept on uninstall.
 **The installer isn't code-signed.** Windows SmartScreen will warn ("Windows protected your PC" → More info → Run anyway),
 and on PCs with **Smart App Control** turned on Windows blocks it entirely. Signing the installer fixes both
 (see "Code signing" below). Until then, use `npm start` on those PCs.
+
+## Screenshots
+
+![Playdex library: every Steam, Epic and GOG game in one cover grid, with store badges, playtime and per-store counts](docs/screenshot-library.jpg)
+
+![Duplicates tab: the 12 games owned on more than one store, each with a button per store](docs/screenshot-duplicates.jpg)
+
+![Stats tab: 302 games, hours played, share played, disk use, and the most played games](docs/screenshot-stats.jpg)
+
+![Game details: description, developer, release date and genres, with an Install button for each store that owns the game](docs/screenshot-details.jpg)
+
+## Design decisions
+
+- **Read each launcher's own files instead of using store APIs.** No logins or keys, works offline, and the counts
+  match what each launcher shows. The cost is parsing undocumented formats, such as Steam's binary `appinfo.vdf`
+  (`parseAppInfo` in `scan.mjs`). So every counting rule has a test that builds fake launcher folders.
+- **Treat launcher data as untrusted.** Epic's and GOG's folders under `C:\ProgramData` can be edited by every Windows
+  user. Launch and uninstall commands are built in the main process from exact allowed link shapes (`uriLaunch`),
+  nothing runs through a shell, and the page can only send back a game id.
+- **Copy GOG Galaxy's database before reading it.** Galaxy keeps it open, so Playdex reads a temporary copy with Node's
+  built-in SQLite and never touches the real file.
+- **Let the store do the uninstalling.** Playdex never deletes game files. It doesn't run GOG's `unins000.exe` either,
+  because that path comes from a database other users can edit.
+- **Match duplicates by normalized title** (drop ™/®, edition suffixes like "GOTY", move a trailing ", The").
+  Simple and easy to explain; the known limit is games that have a different name on each store (`normalize`).
+- **No UI framework and no runtime dependencies** besides Electron: one plain JavaScript file for the page, served
+  under a strict Content Security Policy that only allows that file to run.
 
 ## Where the data comes from (read-only, no logins)
 
