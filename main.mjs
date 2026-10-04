@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { scanAll } from './scan.mjs';
 import { gameDetails } from './details.mjs';
+import { loadPrefs, savePrefs } from './prefs.mjs';
 
 const ORIGIN = 'app://playdex/';
 const PUBLIC = new URL('./public/', import.meta.url);
@@ -52,6 +53,16 @@ app.whenReady().then(() => {
       .on('error', err => console.error('Launch failed:', err.message)) // missing exe must not crash the app
       .unref();
     return true;
+  });
+
+  // Favorites, hidden games and tags. savePrefs() validates everything the page sends.
+  ipcMain.handle('prefs-get', e => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return loadPrefs(app.getPath('userData'));
+  });
+  ipcMain.handle('prefs-set', (e, prefs) => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return savePrefs(app.getPath('userData'), prefs);
   });
 
   ipcMain.handle('details', (e, id) => {

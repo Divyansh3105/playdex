@@ -19,6 +19,7 @@
       "preload.cjs",
       "scan.mjs",
       "details.mjs",
+      "prefs.mjs",
       "public/**"
     ],
     "win": {

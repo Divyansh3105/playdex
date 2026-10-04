@@ -1,8 +1,87 @@
 const STORES = { steam: 'Steam', epic: 'Epic', gog: 'GOG' };
 const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STORES).indexOf(b.store); // always Steam, Epic, GOG
-const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), installed: false, sort: 'name' };
+const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), show: 'all', sort: 'name' };
 try { if (localStorage.sort in { name: 1, recent: 1, playtime: 1, installed: 1 }) state.sort = localStorage.sort; } catch { /* storage unavailable */ }
 let data = null;
+
+// ---------- favorites, hidden, tags ----------
+// Saved by the main process (which validates them); keyed by game id, i.e. one store's copy.
+let prefs = { favorites: new Set(), hidden: new Set(), tags: new Map() };
+const toPrefs = p => ({ favorites: new Set(p.favorites), hidden: new Set(p.hidden), tags: new Map(Object.entries(p.tags)) });
+async function savePrefs() {
+  try {
+    prefs = toPrefs(await window.library.savePrefs({
+      favorites: [...prefs.favorites], hidden: [...prefs.hidden], tags: Object.fromEntries(prefs.tags),
+    }));
+  } catch { toast('Could not save your change.'); }
+  render();
+}
+const allTags = () => [...new Set([...prefs.tags.values()].flat())].sort((a, b) => a.localeCompare(b));
+
+/** What the Show menu lets through. Hidden games only appear under Show → Hidden. */
+function shown(g) {
+  if (state.show === 'hidden') return prefs.hidden.has(g.id);
+  if (prefs.hidden.has(g.id)) return false;
+  if (state.show === 'installed') return g.installed;
+  if (state.show === 'favorites') return prefs.favorites.has(g.id);
+  if (state.show.startsWith('tag:')) return prefs.tags.get(g.id)?.includes(state.show.slice(4)) ?? false;
+  return true;
+}
+
+function renderShowMenu() {
+  const count = test => data.games.filter(test).length;
+  const options = [['all', 'All games'], ['installed', `Installed (${count(g => g.installed)})`],
+    ['favorites', `Favorites (${count(g => prefs.favorites.has(g.id))})`], ['hidden', `Hidden (${count(g => prefs.hidden.has(g.id))})`]];
+  const tags = allTags().map(t => [`tag:${t}`, `${t} (${count(g => prefs.tags.get(g.id)?.includes(t))})`]);
+  if (![...options, ...tags].some(([v]) => v === state.show)) state.show = 'all'; // e.g. its last tag was removed
+  const opt = ([value, label]) => el('option', { value, textContent: label });
+  $('show').replaceChildren(...options.map(opt), ...(tags.length ? [el('optgroup', { label: 'Tags' }, ...tags.map(opt))] : []));
+  $('show').value = state.show;
+}
+
+/** Favorite / hide buttons and the tag editor in the details window. */
+function prefsControls(g) {
+  const box = el('div', { className: 'mine' });
+  const draw = () => {
+    const tags = prefs.tags.get(g.id) ?? [];
+    const toggle = (kind, on, label) => {
+      const b = el('button', { className: 'toggle-btn', textContent: label, onclick: async () => {
+        on ? prefs[kind].delete(g.id) : prefs[kind].add(g.id); // prefs[kind]: savePrefs() replaces the sets
+        await savePrefs(); draw();
+      } });
+      b.setAttribute('aria-pressed', on);
+      return b;
+    };
+    const full = tags.length >= 20;
+    const input = el('input', { className: 'tag-input', maxLength: 32, disabled: full, placeholder: full ? 'Tag limit reached' : 'Add a tag…', ariaLabel: 'Add a tag' });
+    input.setAttribute('list', 'tag-suggestions');
+    input.onkeydown = async e => {
+      if (e.key !== 'Enter' && e.key !== ',') return;
+      e.preventDefault();
+      const t = input.value.trim();
+      if (!t || tags.includes(t)) { input.value = ''; return; }
+      prefs.tags.set(g.id, [...tags, t]);
+      await savePrefs(); draw();
+      box.querySelector('.tag-input')?.focus();
+    };
+    const remove = t => async () => {
+      const rest = tags.filter(x => x !== t);
+      rest.length ? prefs.tags.set(g.id, rest) : prefs.tags.delete(g.id);
+      await savePrefs(); draw();
+    };
+    const fav = prefs.favorites.has(g.id), hidden = prefs.hidden.has(g.id);
+    box.replaceChildren(
+      el('div', { className: 'mine-row' },
+        toggle('favorites', fav, fav ? '★ Favorite' : '☆ Favorite'),
+        toggle('hidden', hidden, hidden ? 'Hidden · Unhide' : 'Hide from library')),
+      el('div', { className: 'tags' },
+        ...tags.map(t => el('span', { className: 'tag' }, t, el('button', { textContent: '×', ariaLabel: `Remove tag ${t}`, title: 'Remove tag', onclick: remove(t) }))),
+        input),
+      el('datalist', { id: 'tag-suggestions' }, ...allTags().filter(t => !tags.includes(t)).map(t => el('option', { value: t }))));
+  };
+  draw();
+  return box;
+}
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => {
@@ -70,6 +149,7 @@ async function openDetails(g) {
       el('div', { className: 'stores' }, ...copies.map(c => el('button', {
         className: `play ${c.store}`, textContent: `${actionLabel(c)} · ${STORES[c.store]}`, onclick: () => launch(c),
       }))),
+      prefsControls(g),
       body));
   if (!dlg.open) dlg.showModal();
 
@@ -97,6 +177,7 @@ const card = g => el('button', { className: 'card', title: `${g.title} (${STORES
   cover(g),
   el('span', { className: 'action', textContent: 'Details' }),
   el('span', { className: 'meta' },
+    prefs.favorites.has(g.id) ? el('span', { className: 'fav', textContent: '★', title: 'Favorite' }) : null,
     el('span', { className: 'name', textContent: g.title }),
     g.installed ? el('span', { className: 'dot', title: 'Installed' }) : null,
     el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })),
@@ -174,20 +255,22 @@ function render() {
       textContent: errors[s] ? `${name}: not found` : `${name} ${games.filter(g => g.store === s).length}` })));
   $('dup-count').textContent = duplicates.length;
   for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
-  $('sort').disabled = state.tab !== 'library';        // Duplicates is A–Z, Disk space is largest first
-  $('installed').disabled = state.tab === 'disk';      // Disk space only lists installed games anyway
+  // Sort and Show apply to the Library tab. Duplicates (A–Z) and Disk space (largest first) list every copy.
+  $('sort').disabled = $('show').disabled = state.tab !== 'library';
+  renderShowMenu();
 
   const q = state.q.trim().toLowerCase();
-  const match = g => state.stores.has(g.store) && (!state.installed || g.installed) && g.title.toLowerCase().includes(q);
+  const match = g => state.stores.has(g.store) && g.title.toLowerCase().includes(q);
   const problems = [...Object.entries(errors).map(([s, m]) => `${STORES[s]}: ${m}`), ...notes];
   const errorNote = problems.length ? el('p', { className: 'errors', textContent: problems.join(' · ') }) : null;
 
   if (state.tab === 'library') {
-    const list = games.filter(match);
+    const list = games.filter(g => match(g) && shown(g));
     if (SORTS[state.sort]) list.sort(SORTS[state.sort]);
+    const empty = { favorites: 'No favorites yet. Open a game and click ☆ Favorite.', hidden: 'No hidden games.' }[state.show] ?? 'No games match.';
     $('view').replaceChildren(...[errorNote, list.length
       ? el('div', { className: 'grid' }, ...list.map(card))
-      : el('p', { className: 'empty', textContent: 'No games match.' })].filter(Boolean));
+      : el('p', { className: 'empty', textContent: empty })].filter(Boolean));
   } else if (state.tab === 'disk') {
     $('view').replaceChildren(...[errorNote, ...diskView(g => state.stores.has(g.store) && g.title.toLowerCase().includes(q))].filter(Boolean));
   } else {
@@ -204,7 +287,10 @@ async function load() {
   $('view').replaceChildren(el('p', { className: 'empty',
     textContent: 'Scanning your launchers…' }));
   try {
-    data = await window.library.scan();
+    const [scan, saved] = await Promise.all([window.library.scan(), window.library.prefs().catch(() => null)]);
+    data = scan;
+    if (saved) prefs = toPrefs(saved);
+    else toast('Could not load your favorites and tags.');
     render();
   } catch (e) {
     $('view').replaceChildren(el('p', { className: 'empty', textContent: `Scan failed: ${e.message}` }));
@@ -223,7 +309,7 @@ for (const [s, name] of Object.entries(STORES)) {
 }
 for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).onclick = () => { state.tab = t; if (data) render(); };
 $('q').oninput = e => { state.q = e.target.value; if (data) render(); };
-$('installed').onchange = e => { state.installed = e.target.checked; if (data) render(); };
+$('show').onchange = e => { state.show = e.target.value; if (data) render(); };
 $('sort').value = state.sort;
 $('sort').onchange = e => {
   state.sort = e.target.value;

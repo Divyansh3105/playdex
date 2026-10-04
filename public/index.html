@@ -34,9 +34,23 @@
   .chip.steam[aria-pressed="true"] { color: var(--steam); }
   .chip.epic[aria-pressed="true"] { color: var(--epic); }
   .chip.gog[aria-pressed="true"] { color: var(--gog); }
-  #sort { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
-  #sort:disabled { opacity: .45; cursor: default; }
-  #sort option { background: var(--panel); }
+  #sort, #show { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+  #sort:disabled, #show:disabled { opacity: .45; cursor: default; }
+  #sort option, #show option, #show optgroup { background: var(--panel); }
+  .fav { color: #facc15; flex: none; }
+
+  .mine { margin: -6px 0 16px; display: grid; gap: 10px; }
+  .mine-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toggle-btn { border: 1px solid var(--line); background: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+  .toggle-btn:hover { color: var(--text); border-color: #3a4152; }
+  .toggle-btn[aria-pressed="true"] { color: #facc15; border-color: #a16207; }
+  .toggle-btn[aria-pressed="true"]:last-child { color: var(--text); border-color: #3a4152; background: #262b36; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: #262b36; font-size: 13px; }
+  .tag button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 6px; border-radius: 999px; font-size: 15px; line-height: 1; }
+  .tag button:hover { color: var(--text); background: #3a4152; }
+  .tag-input { flex: 1; min-width: 140px; max-width: 220px; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); background: none; }
+  .tag-input:focus { border-style: solid; }
   .card .sub { margin-top: -4px; min-height: 1.4em; font-size: 12px; color: var(--muted); } /* min-height keeps rows aligned */
   label.toggle { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
   #rescan, #settings { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
@@ -139,7 +153,7 @@
     <option value="playtime">Most played</option>
     <option value="installed">Installed first</option>
   </select>
-  <label class="toggle"><input type="checkbox" id="installed"> Installed only</label>
+  <select id="show" aria-label="Show"><option value="all">All games</option></select>
   <button id="rescan">Rescan</button>
   <button id="settings" title="Opens config.json, where you can add a Steam Web API key for an exact Steam library">Settings</button>
 </nav>

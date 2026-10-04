@@ -67,6 +67,17 @@ The **Sort** menu orders the library by name, recently played, most played, or i
 | GOG | Galaxy's `GameTimes` and `LastPlayedDates` tables |
 | Epic | Not available: Epic keeps it only in its encrypted account data, so Epic games show no playtime |
 
+## Favorites, hidden games and tags
+
+In a game's details window: **☆ Favorite**, **Hide from library**, and tags (type one and press Enter; existing
+tags are suggested). The **Show** menu filters the library to Installed, Favorites, Hidden, or any tag.
+
+- They apply per store copy, so you can hide the Epic copy of a game and keep the Steam one.
+- Hiding only affects the library view: the launcher counts in the header, Duplicates and Disk space still include everything.
+- Saved in `%APPDATA%\Playdex\library.json`. The main process validates everything the page sends (known id
+  formats, up to 20 tags of 32 characters per game), saves atomically, and keeps an unreadable file as a backup
+  instead of overwriting it.
+
 ## Disk space
 
 The **Disk space** tab shows free space on each drive that has games, how much of it your games use, installed
