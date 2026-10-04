@@ -17,8 +17,9 @@ const EXPLORER = path.join(SYSTEM, 'explorer.exe');
 // (C:\ProgramData\Epic and \GOG.com), so it is untrusted: only exact, known URI shapes get through.
 // No commas, quotes or spaces, which explorer.exe would otherwise parse as its own switches.
 const SAFE_URIS = [
-  /^steam:\/\/(rungameid|install)\/\d+$/,
+  /^steam:\/\/(rungameid|install|uninstall)\/\d+$/,
   /^com\.epicgames\.launcher:\/\/apps\/[\w-]+%3A[\w-]+%3A[\w-]+\?action=launch&silent=true$/,
+  /^com\.epicgames\.launcher:\/\/store\/library$/, // Epic has no uninstall link: open its library, uninstall there
   /^goggalaxy:\/\/openGameView\/gog_\d+$/,
 ];
 
@@ -250,6 +251,7 @@ async function scanSteam(notes, root) {
     cover: `${art}/${id}/library_600x900.jpg`,
     fallback: `${art}/${id}/header.jpg`,
     launch: uriLaunch(installed.has(id) ? `steam://rungameid/${id}` : `steam://install/${id}`),
+    uninstall: installed.has(id) ? uriLaunch(`steam://uninstall/${id}`) : null, // Steam asks to confirm
   }));
 }
 
@@ -287,6 +289,7 @@ function scanEpic(notes, base) {
         playtime: null, // Epic keeps playtime only in its encrypted account data
         cover: img && `${img.url}?w=360&h=480&resize=1`,
         launch: uriLaunch(`com.epicgames.launcher://apps/${i.namespace}%3A${i.id}%3A${i.releaseInfo?.[0]?.appId}?action=launch&silent=true`),
+        uninstall: installed.has(i.id) ? uriLaunch('com.epicgames.launcher://store/library') : null,
       };
     });
 }
@@ -339,6 +342,8 @@ function scanGog(notes, src, galaxyExe) {
         // installed: run it directly; otherwise (or if the install looks wrong) open its page in Galaxy to install
         launch: (installed.has(r.key) && gogLaunch(exe, r.key.slice(4), installed.get(r.key)))
           || uriLaunch(`goggalaxy://openGameView/${r.key}`),
+        // Galaxy's game page, not the folder's unins000.exe: that path comes from a DB other users can write.
+        uninstall: installed.has(r.key) ? uriLaunch(`goggalaxy://openGameView/${r.key}`) : null,
         };
       });
   } finally { db.close(); }

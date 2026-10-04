@@ -1,0 +1,15 @@
+# Weekly update PRs. Actions are pinned to commit SHAs; Dependabot moves the SHA and its version comment together.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ['*']
+        update-types: [minor, patch] # majors (e.g. Electron) get a PR of their own
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

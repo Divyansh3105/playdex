@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { scanAll } from './scan.mjs';
 import { gameDetails } from './details.mjs';
 import { loadPrefs, savePrefs } from './prefs.mjs';
+import { exportRows, toCsv } from './export.mjs';
 
 const ORIGIN = 'app://playdex/';
 const PUBLIC = new URL('./public/', import.meta.url);
@@ -13,9 +14,8 @@ const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/ja
 // Only our own script runs; images only from https CDNs; no other requests, forms or plugins.
 const CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https:; base-uri 'none'; form-action 'none'";
 
-let launches = new Map(); // game id -> argv built and validated by scan.mjs, from the last scan
-let games = new Map();    // game id -> game, from the last scan (details are only served for these)
-let scanning = null;      // one scan at a time; parallel calls share it
+let games = new Map(); // game id -> game from the last scan, with the launch/uninstall argv scan.mjs built and validated
+let scanning = null;   // one scan at a time; parallel calls share it
 
 // A real origin (instead of file://) so 'self' in the CSP means exactly our two files.
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
@@ -39,20 +39,40 @@ app.whenReady().then(() => {
     // %APPDATA%\Playdex: holds config.json (Steam key).
     scanning ??= scanAll(app.getPath('userData')).finally(() => { scanning = null; });
     const result = await scanning;
-    launches = new Map(result.games.map(g => [g.id, g.launch]));
     games = new Map(result.games.map(g => [g.id, g]));
-    // Launch commands stay in this process; the page only ever sends back a game id.
-    return JSON.parse(JSON.stringify(result, (k, v) => (k === 'launch' ? undefined : v)));
+    // Commands stay in this process; the page only sends back a game id. It just learns whether uninstall is possible.
+    return JSON.parse(JSON.stringify(result, (k, v) => (k === 'launch' ? undefined : k === 'uninstall' ? !!v : v)));
   });
 
-  ipcMain.handle('launch', (e, id) => {
-    if (!fromApp(e)) throw new Error('Forbidden');
-    const argv = launches.get(id);
+  const run = argv => {
     if (!argv) return false;
     spawn(argv[0], argv.slice(1), { detached: true, stdio: 'ignore' }) // no shell: args can't be reinterpreted
       .on('error', err => console.error('Launch failed:', err.message)) // missing exe must not crash the app
       .unref();
     return true;
+  };
+  ipcMain.handle('launch', (e, id) => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return run(games.get(id)?.launch);
+  });
+  // Hands off to the store, which does the uninstalling (and asks first). Playdex never deletes game files.
+  ipcMain.handle('uninstall', (e, id) => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return run(games.get(id)?.uninstall);
+  });
+
+  // The last scan plus favorites, hidden and tags, saved where the user picks. The extension picks the format.
+  ipcMain.handle('export', async e => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    if (!games.size) return null;
+    const { canceled, filePath } = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender), {
+      defaultPath: `Playdex library ${new Date().toISOString().slice(0, 10)}.csv`,
+      filters: [{ name: 'CSV (Excel, Google Sheets)', extensions: ['csv'] }, { name: 'JSON', extensions: ['json'] }],
+    });
+    if (canceled || !filePath) return null;
+    const rows = exportRows([...games.values()], await loadPrefs(app.getPath('userData')));
+    await fs.writeFile(filePath, /\.json$/i.test(filePath) ? JSON.stringify(rows, null, 2) : toCsv(rows));
+    return path.basename(filePath);
   });
 
   // Favorites, hidden games and tags. savePrefs() validates everything the page sends.

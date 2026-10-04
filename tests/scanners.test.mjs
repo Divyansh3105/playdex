@@ -102,6 +102,14 @@ test('installed state and launch commands', () => {
   assert.deepEqual(find('Mafia II').launch.slice(1), [`goggalaxy://openGameView/${find('Mafia II').id.slice(4)}`]);
 });
 
+test('uninstall hands off to the store, for installed games only', () => {
+  assert.deepEqual(find('Half Game').uninstall.slice(1), ['steam://uninstall/100']);
+  assert.deepEqual(find('Apex Legends').uninstall.slice(1), ['com.epicgames.launcher://store/library']);
+  assert.deepEqual(find('Fallout').uninstall.slice(1), ['goggalaxy://openGameView/gog_1']);
+  assert.equal(find('Delisted Classic').uninstall, null);
+  assert.equal(find('Mafia II').uninstall, null);
+});
+
 test('playtime: Steam and GOG known, Epic unknown', () => {
   assert.equal(find('Half Game').playtime, 600);
   assert.equal(find('Half Game').lastPlayed, 1774886983000);

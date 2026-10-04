@@ -92,6 +92,39 @@ games largest first, and a warning when the same game is installed from two stor
 | Epic | `InstallSize` in each install manifest |
 | GOG | Galaxy doesn't record it: Playdex adds up the files in the install folder, but only after the folder passes the same `goggame-<id>.info` check used for launching |
 
+**Uninstall…** on a row hands off to the store, which does the uninstalling. Playdex never deletes game files itself.
+
+| Store | What Uninstall… does |
+|---|---|
+| Steam | `steam://uninstall/<appid>`: Steam asks you to confirm |
+| Epic | Epic has no uninstall link, so it opens your Epic library: click ⋯ on the game, then Uninstall |
+| GOG | Opens the game in Galaxy: settings icon next to Play → Manage installation → Uninstall. (Not the folder's `unins000.exe`: that path comes from a database other Windows users can edit.) |
+
+## Stats
+
+The **Stats** tab totals what the store buttons and search let through: games (counted once across stores),
+installed games, hours played, the share of games you've played (Epic left out, as its playtime is unknown),
+space on disk, a line per store, and your 10 most played games.
+
+## Export
+
+**Export** saves the library as CSV (opens in Excel or Google Sheets) or JSON. Pick the type in the save dialog.
+One row per store copy: store, title, installed, playtime in minutes, last played, size in bytes, drive, favorite,
+hidden and tags. Cells that start with `=`, `+`, `-` or `@` get a leading `'` so spreadsheets don't run them as formulas.
+
+## Auto-refresh and keyboard shortcuts
+
+When you come back to Playdex (say, after installing or uninstalling a game in a launcher), it rescans quietly,
+at most every 15 seconds, and keeps showing the current view meanwhile.
+
+| Key | Action |
+|---|---|
+| `/` or Ctrl+F | Search (Esc clears it, Esc again leaves it) |
+| 1–4 | Library, Duplicates, Disk space, Stats |
+| P | What should I play? |
+| F5 | Rescan |
+| ? | Show these shortcuts |
+
 ## Game details
 
 Clicking a game opens its details: description, developer, publisher, release date and genres, with a
@@ -112,14 +145,14 @@ Uninstalled ones open their page in Galaxy.
 
 ## Security
 
-- **No network server.** The page talks to the app over Electron IPC (`preload.cjs` exposes only `scan` and `launch`),
+- **No network server.** The page talks to the app over Electron IPC (`preload.cjs` exposes a short list of calls),
   and the main process ignores IPC that doesn't come from the app's own page.
 - The page runs sandboxed with context isolation and no Node access. It can't navigate away or open windows,
   all permission requests (camera, mic…) are denied, and it's served from `app://playdex/` with a strict
   Content Security Policy: only `app.js` runs, images load only over https, and no referrer is sent.
 - Epic's and GOG's data folders are writable by every Windows user, so their contents are treated as untrusted:
   launch commands only accept exact URI shapes (`uriLaunch`), GOG installs must contain their `goggame-<id>.info`,
-  and nothing runs through a shell. The page only sends a game id; launch commands never leave the main process.
+  and nothing runs through a shell. The page only sends a game id; launch and uninstall commands never leave the main process.
 - Remaining risk: another user who can edit Galaxy's database could point an installed game at a different folder
   that has a matching `.info` file. Galaxy itself trusts that database too, so this app adds no new risk there.
 
@@ -136,6 +169,8 @@ then `npm run dist`. A signed installer passes Smart App Control and builds Smar
 `npm test` runs unit tests (title matching, file parsers, launch validation) and scanner tests that build fake
 Steam, Epic and GOG data folders (`tests/fixtures.mjs`) with one entry per counting rule, so changes that would make
 Playdex's counts drift from the launchers' fail. GitHub Actions runs them on every push and pull request.
+The workflows pin each action to a commit SHA, and Dependabot (`.github/dependabot.yml`) opens weekly PRs to update
+those pins and the npm packages.
 
 ## License
 

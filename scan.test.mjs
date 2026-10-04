@@ -61,7 +61,10 @@ test('only exact launcher URI shapes are launchable', () => {
   assert.ok(uriLaunch('steam://rungameid/209000'));
   assert.ok(uriLaunch('com.epicgames.launcher://apps/ns1%3Aabc123%3AWombat?action=launch&silent=true'));
   assert.ok(uriLaunch('goggalaxy://openGameView/gog_1207659001'));
+  assert.ok(uriLaunch('steam://uninstall/209000'));
+  assert.ok(uriLaunch('com.epicgames.launcher://store/library'));
   for (const bad of [
+    'com.epicgames.launcher://store/library?x=1', 'steam://uninstall/1 2',
     'steam://rungameid/1,C:\\evil.exe',                                        // explorer.exe comma switch
     'com.epicgames.launcher://apps/a%3Ab%3Ac?action=uninstall',                 // different action
     'com.epicgames.launcher://apps/a"%3Ab%3Ac?action=launch&silent=true',       // quote injection

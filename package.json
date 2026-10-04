@@ -20,6 +20,7 @@
       "scan.mjs",
       "details.mjs",
       "prefs.mjs",
+      "export.mjs",
       "public/**"
     ],
     "win": {

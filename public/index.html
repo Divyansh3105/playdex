@@ -53,7 +53,7 @@
   .tag-input:focus { border-style: solid; }
   .card .sub { margin-top: -4px; min-height: 1.4em; font-size: 12px; color: var(--muted); } /* min-height keeps rows aligned */
   label.toggle { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
-  #rescan, #settings { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  #rescan, #export, #settings { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
   #rescan { margin-left: auto; }
 
   main { padding: 20px 24px 48px; }
@@ -98,12 +98,19 @@
   .key.games { background: var(--accent); } .key.other { background: #3a4152; } .key.free { background: #0b0d12; border: 1px solid var(--line); }
   .warn { max-width: 1240px; margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; border: 1px solid #a16207; background: #422006; color: #fde68a; }
   .disklist { display: grid; gap: 6px; max-width: 1240px; }
-  .diskrow { display: grid; grid-template-columns: 34px minmax(180px, 2fr) minmax(80px, 3fr) 80px 40px; gap: 14px; align-items: center;
+  .diskrow { display: grid; grid-template-columns: 34px minmax(140px, 2fr) minmax(80px, 3fr) 80px 40px 96px; gap: 14px; align-items: center;
              padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; text-align: left; }
+  .statlist .diskrow { grid-template-columns: 34px minmax(180px, 2fr) minmax(80px, 3fr) 80px 110px; } /* last played instead of drive + uninstall */
   .diskrow:hover { border-color: #3a4152; }
   .diskrow img, .diskrow .ph { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; font-size: 0; padding: 0; }
   .diskrow .title { display: flex; gap: 8px; align-items: center; min-width: 0; }
-  .diskrow .title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .diskrow .title > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uninstall { border: 1px solid var(--line); background: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+  .uninstall:hover { color: #fca5a5; border-color: #7f1d1d; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; max-width: 1240px; }
+  .tile { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+  .tile strong { display: block; margin-bottom: 2px; font-size: 24px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .section { margin: 24px 0 10px; font-size: 15px; }
   .diskrow .size { text-align: right; font-variant-numeric: tabular-nums; }
   .diskrow .where { color: var(--muted); font-size: 12px; }
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
@@ -144,8 +151,9 @@
     <button role="tab" id="tab-library" aria-selected="true">Library</button>
     <button role="tab" id="tab-dups" aria-selected="false">Duplicates<span class="count" id="dup-count">0</span></button>
     <button role="tab" id="tab-disk" aria-selected="false">Disk space</button>
+    <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
   </div>
-  <input type="search" id="q" placeholder="Search games…" aria-label="Search games">
+  <input type="search" id="q" placeholder="Search games…" aria-label="Search games" aria-keyshortcuts="/ Control+F" title="Search (/ or Ctrl+F). Press ? for all shortcuts.">
   <div id="chips" style="display:flex;gap:6px"></div>
   <select id="sort" aria-label="Sort games">
     <option value="name">Name (A–Z)</option>
@@ -154,8 +162,9 @@
     <option value="installed">Installed first</option>
   </select>
   <select id="show" aria-label="Show"><option value="all">All games</option></select>
-  <button id="pick" title="Opens a random game from the games shown, installed ones first">🎲 What should I play?</button>
-  <button id="rescan">Rescan</button>
+  <button id="pick" title="Opens a random game from the games shown, installed ones first (P)" aria-keyshortcuts="P">🎲 What should I play?</button>
+  <button id="rescan" title="Rescan your launchers (F5)" aria-keyshortcuts="F5">Rescan</button>
+  <button id="export" title="Save your library as a CSV or JSON file">Export</button>
   <button id="settings" title="Opens config.json, where you can add a Steam Web API key for an exact Steam library">Settings</button>
 </nav>
 <main id="view"></main>

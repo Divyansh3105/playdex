@@ -1,5 +1,6 @@
 const STORES = { steam: 'Steam', epic: 'Epic', gog: 'GOG' };
 const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STORES).indexOf(b.store); // always Steam, Epic, GOG
+const TABS = ['library', 'dups', 'disk', 'stats']; // in order: keys 1–4
 const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), show: 'all', sort: 'name' };
 try { if (localStorage.sort in { name: 1, recent: 1, playtime: 1, installed: 1 }) state.sort = localStorage.sort; } catch { /* storage unavailable */ }
 let data = null;
@@ -94,11 +95,11 @@ const el = (tag, props = {}, ...kids) => {
   return e;
 };
 
-function toast(msg) {
+function toast(msg, ms = 2500) {
   $('toast').textContent = msg;
   $('toast').classList.add('show');
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => $('toast').classList.remove('show'), 2500);
+  toast.t = setTimeout(() => $('toast').classList.remove('show'), ms);
 }
 
 async function launch(g) {
@@ -207,6 +208,27 @@ const sum = list => list.reduce((t, g) => t + (g.size ?? 0), 0);
 const bar = (...parts) => el('div', { className: 'bar' }, // parts: [className, fraction 0..1, tooltip]
   ...parts.map(([cls, f, tip]) => { const s = el('span', { className: cls, title: tip }); s.style.width = `${Math.max(0, Math.min(1, f)) * 100}%`; return s; }));
 
+// A row in the Disk space and Stats lists. The whole row opens the details; the title is a button for the keyboard.
+const listRow = (g, value, fraction, ...rest) => el('div', { className: 'diskrow', title: 'Show details', onclick: () => openDetails(g) },
+  cover(g),
+  el('span', { className: 'title' }, el('button', { className: 'link', textContent: g.title }), el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })),
+  bar(['games', fraction]),
+  el('span', { className: 'size', textContent: value }),
+  ...rest);
+
+// The store does the uninstalling and asks first; Epic and GOG Galaxy only open where the button is.
+const UNINSTALL_HINT = {
+  steam: 'Steam will ask you to confirm.',
+  epic: 'Your Epic library is opening: click ⋯ on the game, then Uninstall.',
+  gog: 'GOG Galaxy is opening the game: click the settings icon next to Play, then Manage installation → Uninstall.',
+};
+async function uninstall(g) {
+  const ok = await window.library.uninstall(g.id).catch(() => false);
+  toast(ok ? `${g.title}: ${UNINSTALL_HINT[g.store]}` : 'Could not open the uninstaller. Try Rescan.', 7000);
+}
+const uninstallButton = g => (g.uninstall ? el('button', { className: 'uninstall', textContent: 'Uninstall…',
+  title: `Uninstall with ${STORES[g.store]}`, onclick: e => { e.stopPropagation(); uninstall(g); } }) : el('span'));
+
 function diskView(match) {
   const { games, drives } = data;
   const installed = games.filter(g => g.installed);
@@ -237,18 +259,42 @@ function diskView(match) {
   const totals = Object.entries(STORES).map(([s, name]) => [name, installed.filter(g => g.store === s)]).filter(([, l]) => l.length)
     .map(([name, l]) => `${name} ${fmtBytes(sum(l))} (${l.length} game${l.length > 1 ? 's' : ''})`).join(' · ');
   const max = Math.max(1, ...shown.map(g => g.size ?? 0));
-  const row = g => el('button', { className: 'diskrow', title: 'Show details', onclick: () => openDetails(g) },
-    cover(g),
-    el('span', { className: 'title' }, el('span', { textContent: g.title }), el('span', { className: `badge ${g.store}`, textContent: STORES[g.store] })),
-    bar(['games', (g.size ?? 0) / max]),
-    el('span', { className: 'size', textContent: fmtBytes(g.size) }),
-    el('span', { className: 'where', textContent: g.drive ?? '' }));
+  const row = g => listRow(g, fmtBytes(g.size), (g.size ?? 0) / max,
+    el('span', { className: 'where', textContent: g.drive ?? '' }), uninstallButton(g));
 
   return [
     el('div', { className: 'drives' }, ...driveCards),
     ...twice,
     el('p', { className: 'hint', textContent: `Installed: ${fmtBytes(sum(installed))} in ${installed.length} games — ${totals}` }),
     shown.length ? el('div', { className: 'disklist' }, ...shown.map(row)) : el('p', { className: 'empty', textContent: 'No installed games match.' }),
+  ];
+}
+
+// ---------- stats ----------
+// Games count once however many stores you own them on, like the header total.
+function statsView(list) {
+  if (!list.length) return [el('p', { className: 'empty', textContent: 'No games match.' })];
+  const keys = l => new Set(l.map(g => g.key));
+  const installed = list.filter(g => g.installed);
+  const minutes = l => l.reduce((t, g) => t + (g.playtime ?? 0), 0);
+  const tracked = keys(list.filter(g => g.playtime != null)), done = keys(list.filter(played));
+  const playedCount = [...tracked].filter(k => done.has(k)).length;
+  const tile = (value, label) => el('div', { className: 'tile' }, el('strong', { textContent: value }), el('span', { textContent: label }));
+  const h = m => `${Math.round(m / 60).toLocaleString('en')} h`;
+  const perStore = Object.entries(STORES).map(([s, name]) => [s, name, list.filter(g => g.store === s)]).filter(([, , l]) => l.length)
+    .map(([s, name, l]) => `${name} ${l.length} game${l.length > 1 ? 's' : ''} · ${s === 'epic' ? 'playtime not tracked' : h(minutes(l))}`).join('  |  ');
+  const top = list.filter(g => g.playtime > 0).sort(SORTS.playtime).slice(0, 10);
+  return [
+    el('div', { className: 'tiles' },
+      tile(keys(list).size.toLocaleString('en'), 'games'),
+      tile(keys(installed).size.toLocaleString('en'), 'installed'),
+      tile(h(minutes(list)), 'played in total'),
+      tile(tracked.size ? `${Math.round(100 * playedCount / tracked.size)}%` : '–', `played (${tracked.size - playedCount} not yet)`),
+      tile(fmtBytes(sum(installed)), 'on disk')),
+    el('p', { className: 'hint', textContent: perStore }),
+    ...(top.length ? [el('h2', { className: 'section', textContent: 'Most played' }), el('div', { className: 'disklist statlist' },
+      ...top.map(g => listRow(g, hours(g.playtime), g.playtime / top[0].playtime,
+        el('span', { className: 'where', textContent: g.lastPlayed ? ago(g.lastPlayed) : '' }))))] : []),
   ];
 }
 
@@ -259,8 +305,8 @@ function render() {
     el('span', { className: `badge ${s}`, title: errors[s] ?? '',
       textContent: errors[s] ? `${name}: not found` : `${name} ${games.filter(g => g.store === s).length}` })));
   $('dup-count').textContent = duplicates.length;
-  for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
-  // Sort and Show apply to the Library tab. Duplicates (A–Z) and Disk space (largest first) list every copy.
+  for (const t of TABS) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
+  // Sort and Show apply to the Library tab. Duplicates (A–Z), Disk space (largest first) and Stats count every copy.
   $('sort').disabled = $('show').disabled = $('pick').disabled = state.tab !== 'library';
   renderShowMenu();
 
@@ -277,7 +323,9 @@ function render() {
       ? el('div', { className: 'grid' }, ...list.map(card))
       : el('p', { className: 'empty', textContent: empty })].filter(Boolean));
   } else if (state.tab === 'disk') {
-    $('view').replaceChildren(...[errorNote, ...diskView(g => state.stores.has(g.store) && g.title.toLowerCase().includes(q))].filter(Boolean));
+    $('view').replaceChildren(...[errorNote, ...diskView(match)].filter(Boolean));
+  } else if (state.tab === 'stats') {
+    $('view').replaceChildren(...[errorNote, ...statsView(games.filter(match))].filter(Boolean));
   } else {
     const list = duplicates.filter(d => d.games.some(match));
     $('view').replaceChildren(
@@ -288,20 +336,26 @@ function render() {
   }
 }
 
-async function load() {
-  $('view').replaceChildren(el('p', { className: 'empty',
-    textContent: 'Scanning your launchers…' }));
+// quiet: an auto-refresh, which keeps the current view on screen until the new scan is ready.
+let lastScan = 0;
+async function load(quiet = false) {
+  lastScan = Date.now();
+  if (!quiet) $('view').replaceChildren(el('p', { className: 'empty', textContent: 'Scanning your launchers…' }));
   try {
     const [scan, saved] = await Promise.all([window.library.scan(), window.library.prefs().catch(() => null)]);
     data = scan;
     playedKeys = new Set(scan.games.filter(played).map(g => g.key));
     if (saved) prefs = toPrefs(saved);
-    else toast('Could not load your favorites and tags.');
+    else if (!quiet) toast('Could not load your favorites and tags.');
     render();
   } catch (e) {
-    $('view').replaceChildren(el('p', { className: 'empty', textContent: `Scan failed: ${e.message}` }));
+    if (quiet) toast('Could not refresh the library.');
+    else $('view').replaceChildren(el('p', { className: 'empty', textContent: `Scan failed: ${e.message}` }));
   }
 }
+// Auto-refresh: back in the window (say, after installing or uninstalling in a launcher), rescan quietly.
+// ponytail: refocus only, at most every 15 s; watch the launchers' folders if changes while focused matter.
+window.onfocus = () => { if (data && Date.now() - lastScan > 15e3) load(true); };
 
 for (const [s, name] of Object.entries(STORES)) {
   const chip = el('button', { className: `chip ${s}`, textContent: name });
@@ -313,7 +367,8 @@ for (const [s, name] of Object.entries(STORES)) {
   };
   $('chips').append(chip);
 }
-for (const t of ['library', 'dups', 'disk']) $(`tab-${t}`).onclick = () => { state.tab = t; if (data) render(); };
+const setTab = t => { state.tab = t; if (data) render(); };
+for (const t of TABS) $(`tab-${t}`).onclick = () => setTab(t);
 $('q').oninput = e => { state.q = e.target.value; if (data) render(); };
 $('show').onchange = e => { state.show = e.target.value; if (data) render(); };
 $('sort').value = state.sort;
@@ -332,7 +387,33 @@ $('pick').onclick = () => {
   lastPick = g.id;
   openDetails(g);
 };
-$('rescan').onclick = load;
+$('rescan').onclick = () => load();
+$('export').onclick = async () => {
+  const name = await window.library.exportLibrary().catch(() => false); // null: cancelled
+  if (name) toast(`Saved ${name}`);
+  else if (name === false) toast('Could not save the file.');
+};
+
+const SHORTCUTS = '/ or Ctrl+F search · Esc clear · 1–4 tabs · P pick a game · F5 rescan';
+document.onkeydown = e => {
+  const key = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (e.key === 'F5') { e.preventDefault(); load(); return; }
+  if ($('details').open) return; // the window is modal; Esc closes it natively
+  if (e.target === $('q') && e.key === 'Escape') {
+    if ($('q').value) { $('q').value = ''; $('q').dispatchEvent(new Event('input')); } else $('q').blur();
+    e.preventDefault();
+    return;
+  }
+  if ((ctrl && key === 'f') || (e.key === '/' && !e.target.matches('input, select, textarea'))) {
+    e.preventDefault();
+    $('q').focus(); $('q').select();
+    return;
+  }
+  if (ctrl || e.altKey || e.target.matches('input, select, textarea')) return;
+  if (TABS[+e.key - 1]) setTab(TABS[+e.key - 1]);
+  else if (key === 'p' && state.tab === 'library') $('pick').click();
+  else if (e.key === '?') toast(SHORTCUTS, 6000);
+};
 $('details-close').onclick = () => $('details').close();
 $('details').onclick = e => { if (e.target === $('details')) $('details').close(); }; // click on the backdrop
 $('settings').onclick = () => {
