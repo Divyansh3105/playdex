@@ -8,6 +8,9 @@ npm start        # run from source
 npm run dist     # build the installer: dist\Playdex Setup <version>.exe
 ```
 
+Release installers are built by GitHub Actions (`.github/workflows/release.yml`) when a release is published:
+it runs the tests, checks the tag matches `package.json`, builds, and attaches the installer with its SHA-256.
+
 The installer is per-user (no admin needed), lets you choose the folder, and adds Start menu + desktop shortcuts.
 Settings live in `%APPDATA%\Playdex` and are kept on uninstall.
 

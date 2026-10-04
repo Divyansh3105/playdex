@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --disable-warning=ExperimentalWarning --test",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "com.playdex.app",

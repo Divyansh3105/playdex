@@ -1,0 +1,51 @@
+# Builds the Windows installer for a published GitHub release and attaches it, with its SHA-256 in the notes.
+# Builds run here instead of locally: making an NSIS installer means running the fresh, unsigned setup exe once,
+# which Smart App Control blocks on the developer's PC.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # upload the installer and edit the release notes
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Tag must match package.json version
+        shell: bash
+        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+
+      - run: npm run dist
+
+      - name: Attach installer and checksum to the release
+        shell: bash
+        run: |
+          exe=$(ls dist/*.exe)
+          name=$(basename "$exe" | tr ' ' '.')  # GitHub turns spaces in asset names into dots
+          hash=$(sha256sum "$exe" | cut -d' ' -f1)
+          gh release upload "$TAG" "$exe#Playdex Setup ${TAG#v} (Windows x64 installer)" --clobber
+          {
+            gh release view "$TAG" --json body --jq .body
+            printf '\n\n## Verify the download\n```\nSHA-256  %s\n```\n' "$hash"
+            printf 'In PowerShell: `Get-FileHash .\\%s` should print the same value.\n' "$name"
+            printf '\nBuilt by GitHub Actions from tag `%s` (commit %s).\n' "$TAG" "$(git rev-parse --short HEAD)"
+          } > notes.md
+          gh release edit "$TAG" --notes-file notes.md
