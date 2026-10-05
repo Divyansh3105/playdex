@@ -1,4 +1,5 @@
-# Builds the Windows installer for a published GitHub release and attaches it, with its SHA-256 in the notes.
+# Builds the Windows installer for a published GitHub release and attaches it, with its SHA-256 in the notes,
+# plus the Microsoft Store package (.appx) as a run artifact.
 # Builds run here instead of locally: making an NSIS installer means running the fresh, unsigned setup exe once,
 # which Smart App Control blocks on the developer's PC.
 name: Release
@@ -6,12 +7,14 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch: # builds only the Store package, to check it before a release
 
 permissions:
   contents: write # upload the installer and edit the release notes
 
 jobs:
   windows-installer:
+    if: github.event_name == 'release'
     runs-on: windows-latest
     env:
       TAG: ${{ github.event.release.tag_name }}
@@ -49,3 +52,29 @@ jobs:
             printf '\nBuilt by GitHub Actions from tag `%s` (commit %s).\n' "$TAG" "$(git rev-parse --short HEAD)"
           } > notes.md
           gh release edit "$TAG" --notes-file notes.md
+
+  # The Store signs the package itself, so it stays unsigned here and Smart App Control allows the Store install.
+  # Download it from the run's artifacts and upload it in Partner Center.
+  store-package:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:store
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playdex-store-package
+          path: dist/*.appx
+          if-no-files-found: error

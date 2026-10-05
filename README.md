@@ -209,6 +209,9 @@ Uninstalled ones open their page in Galaxy.
 To sign, add a certificate to electron-builder (`win.signtoolOptions` or Azure Artifact Signing via `win.azureSignOptions`),
 then `npm run dist`. A signed installer passes Smart App Control and builds SmartScreen reputation over time.
 
+The Microsoft Store package (`npm run dist:store`, `build.appx` in `package.json`, tiles in `build/appx/`) needs no
+certificate: the Store signs it. The Release workflow builds it as a run artifact (or run the workflow by hand).
+
 ## Tests
 
 `npm test` runs unit tests (title matching, file parsers, launch validation) and scanner tests that build fake

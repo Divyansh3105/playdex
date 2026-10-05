@@ -3,6 +3,7 @@
   "productName": "Playdex",
   "version": "1.3.0",
   "description": "All your Steam, Epic and GOG games in one place",
+  "author": "Divyansh Garg",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -10,7 +11,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --disable-warning=ExperimentalWarning --test",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:store": "electron-builder --win appx --publish never"
   },
   "build": {
     "appId": "com.playdex.app",
@@ -33,6 +35,16 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false
+    },
+    "appx": {
+      "identityName": "DivyanshGarg.Playdex",
+      "publisher": "CN=688D52CA-7F88-4A4B-9790-4AB2D0CD6B7C",
+      "publisherDisplayName": "Divyansh Garg",
+      "displayName": "Playdex",
+      "backgroundColor": "#111215",
+      "languages": [
+        "en-US"
+      ]
     },
     "electronFuses": {
       "runAsNode": false,
