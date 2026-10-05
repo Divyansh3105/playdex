@@ -222,4 +222,4 @@ those pins and the npm packages.
 
 ## License
 
-[MIT](LICENSE) © 2026 Divyansh Garg
+[MIT](LICENSE) © 2026 Divyansh Garg · [Privacy policy](PRIVACY.md): Playdex collects no data.
