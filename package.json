@@ -11,6 +11,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --disable-warning=ExperimentalWarning --test",
+    "typecheck": "tsc -p .",
     "dist": "electron-builder --win nsis --publish never",
     "dist:store": "electron-builder --win appx --publish never"
   },
@@ -60,8 +61,10 @@
     "node": ">=22.13"
   },
   "devDependencies": {
+    "@types/node": "^24.19.1",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.63.0",
+    "typescript": "^7.0.2"
   }
 }

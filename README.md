@@ -218,7 +218,9 @@ certificate: the Store signs it. The Release workflow builds it as a run artifac
 Steam, Epic and GOG data folders (`tests/fixtures.mjs`) with one entry per counting rule, so changes that would make
 Playdex's counts drift from the launchers' fail. UI tests (`tests/ui.test.mjs`) load the page in Microsoft Edge
 through Playwright with fake library data and check the Stats math, filters, sorting, shortcuts and favorites.
-GitHub Actions runs them all on every push and pull request.
+`npm run typecheck` type-checks the JavaScript with TypeScript (`tsconfig.json`, JSDoc types, no build step);
+`types.d.ts` describes the page ↔ main process contract. GitHub Actions runs the type check and all tests on every
+push and pull request.
 The workflows pin each action to a commit SHA, and Dependabot (`.github/dependabot.yml`) opens weekly PRs to update
 those pins and the npm packages.
 

@@ -1,0 +1,16 @@
+{
+  // Type-checks the JavaScript as is (JSDoc for types); nothing is compiled. Run: npm run typecheck
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "strictNullChecks": true,
+    "target": "ES2024",
+    "module": "NodeNext",
+    "lib": ["ES2024", "ESNext.Collection", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["types.d.ts", "*.mjs", "*.cjs", "public/*.js", "tests/*.mjs"]
+}

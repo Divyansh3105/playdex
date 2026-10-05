@@ -32,6 +32,7 @@ export async function loadPrefs(dir) {
   }
 }
 
+/** @type {Promise<unknown>} */
 let queue = Promise.resolve(); // saves run one at a time, in order
 
 export function savePrefs(dir, prefs) {

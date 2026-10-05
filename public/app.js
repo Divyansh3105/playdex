@@ -3,7 +3,8 @@ const byStore = (a, b) => Object.keys(STORES).indexOf(a.store) - Object.keys(STO
 const TABS = ['library', 'dups', 'disk', 'stats']; // in order: keys 1–4
 const state = { tab: 'library', q: '', stores: new Set(Object.keys(STORES)), show: 'all', sort: 'name' };
 try { if (localStorage.sort in { name: 1, recent: 1, playtime: 1, installed: 1 }) state.sort = localStorage.sort; } catch { /* storage unavailable */ }
-let data = null;
+/** @type {ScanResult} */
+let data = /** @type {any} */ (null); // set by load() before anything reads it
 let playedKeys = new Set(); // keys of games played on any store, so a copy of a game you played elsewhere isn't "not played"
 let visible = [], lastPick = null; // the Library list on screen, for "What should I play?"
 
@@ -88,18 +89,20 @@ function prefsControls(g) {
   return box;
 }
 
-const $ = id => document.getElementById(id);
+/** @type {{ (id: 'details'): HTMLDialogElement, (id: 'q'): HTMLInputElement, (id: 'sort' | 'show'): HTMLSelectElement, (id: 'pick'): HTMLButtonElement, (id: string): HTMLElement }} */
+const $ = /** @type {any} */ (id => document.getElementById(id));
 const el = (tag, props = {}, ...kids) => {
   const e = Object.assign(document.createElement(tag), props);
   e.append(...kids.filter(k => k != null));
   return e;
 };
 
+let toastTimer;
 function toast(msg, ms = 2500) {
   $('toast').textContent = msg;
   $('toast').classList.add('show');
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => $('toast').classList.remove('show'), ms);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), ms);
 }
 
 async function launch(g) {
@@ -239,7 +242,7 @@ function diskView(match) {
     const ours = sum(installed.filter(g => g.drive === d.root));
     if (!d.total) return el('div', { className: 'drive' }, el('strong', { textContent: d.root }), ` Playdex games: ${fmtBytes(ours)}`);
     // Recorded install sizes can exceed what's really used (stale records, compressed folders): clamp.
-    const used = d.total - d.free, games = Math.min(ours, used), other = used - games;
+    const used = d.total - (d.free ?? 0), games = Math.min(ours, used), other = used - games;
     return el('div', { className: 'drive' },
       el('div', { className: 'drive-head' }, el('strong', { textContent: d.root }),
         el('span', { textContent: `${fmtBytes(d.free)} free of ${fmtBytes(d.total)}` })),
@@ -304,8 +307,8 @@ function render() {
   $('stats').replaceChildren(`${new Set(games.map(g => g.key)).size} games`, ...Object.entries(STORES).map(([s, name]) =>
     el('span', { className: `badge ${s}`, title: errors[s] ?? '',
       textContent: errors[s] ? `${name}: not found` : `${name} ${games.filter(g => g.store === s).length}` })));
-  $('dup-count').textContent = duplicates.length;
-  for (const t of TABS) $(`tab-${t}`).setAttribute('aria-selected', state.tab === t);
+  $('dup-count').textContent = String(duplicates.length);
+  for (const t of TABS) $(`tab-${t}`).setAttribute('aria-selected', String(state.tab === t));
   // Sort and Show apply to the Library tab. Duplicates (A–Z), Disk space (largest first) and Stats count every copy.
   $('sort').disabled = $('show').disabled = $('pick').disabled = state.tab !== 'library';
   renderShowMenu();
@@ -369,11 +372,11 @@ for (const [s, name] of Object.entries(STORES)) {
 }
 const setTab = t => { state.tab = t; if (data) render(); };
 for (const t of TABS) $(`tab-${t}`).onclick = () => setTab(t);
-$('q').oninput = e => { state.q = e.target.value; if (data) render(); };
-$('show').onchange = e => { state.show = e.target.value; if (data) render(); };
+$('q').oninput = () => { state.q = $('q').value; if (data) render(); };
+$('show').onchange = () => { state.show = $('show').value; if (data) render(); };
 $('sort').value = state.sort;
-$('sort').onchange = e => {
-  state.sort = e.target.value;
+$('sort').onchange = () => {
+  state.sort = $('sort').value;
   try { localStorage.sort = state.sort; } catch { /* storage unavailable: just not remembered */ }
   if (data) render();
 };
@@ -396,20 +399,20 @@ $('export').onclick = async () => {
 
 const SHORTCUTS = '/ or Ctrl+F search · Esc clear · 1–4 tabs · P pick a game · F5 rescan';
 document.onkeydown = e => {
-  const key = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey, target = /** @type {Element} */ (e.target);
   if (e.key === 'F5') { e.preventDefault(); load(); return; }
   if ($('details').open) return; // the window is modal; Esc closes it natively
-  if (e.target === $('q') && e.key === 'Escape') {
+  if (target === $('q') && e.key === 'Escape') {
     if ($('q').value) { $('q').value = ''; $('q').dispatchEvent(new Event('input')); } else $('q').blur();
     e.preventDefault();
     return;
   }
-  if ((ctrl && key === 'f') || (e.key === '/' && !e.target.matches('input, select, textarea'))) {
+  if ((ctrl && key === 'f') || (e.key === '/' && !target.matches('input, select, textarea'))) {
     e.preventDefault();
     $('q').focus(); $('q').select();
     return;
   }
-  if (ctrl || e.altKey || e.target.matches('input, select, textarea')) return;
+  if (ctrl || e.altKey || target.matches('input, select, textarea')) return;
   if (TABS[+e.key - 1]) setTab(TABS[+e.key - 1]);
   else if (key === 'p' && state.tab === 'library') $('pick').click();
   else if (e.key === '?') toast(SHORTCUTS, 6000);

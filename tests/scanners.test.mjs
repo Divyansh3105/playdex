@@ -89,7 +89,8 @@ test('install sizes and drives', () => {
   assert.equal(find('Moved Game').size, undefined);
   assert.equal(find('Moved Game').drive, undefined);
   assert.deepEqual(result.drives.map(d => d.root), [root]);
-  assert.ok(result.drives[0].free > 0 && result.drives[0].total >= result.drives[0].free);
+  const { free = 0, total = 0 } = result.drives[0];
+  assert.ok(free > 0 && total >= free);
 });
 
 test('installed state and launch commands', () => {

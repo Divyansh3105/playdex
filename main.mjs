@@ -15,6 +15,7 @@ const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/ja
 const CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https:; base-uri 'none'; form-action 'none'";
 
 let games = new Map(); // game id -> game from the last scan, with the launch/uninstall argv scan.mjs built and validated
+/** @type {ReturnType<typeof scanAll> | null} */
 let scanning = null;   // one scan at a time; parallel calls share it
 
 // A real origin (instead of file://) so 'self' in the CSP means exactly our two files.
@@ -65,7 +66,7 @@ app.whenReady().then(() => {
   ipcMain.handle('export', async e => {
     if (!fromApp(e)) throw new Error('Forbidden');
     if (!games.size) return null;
-    const { canceled, filePath } = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender), {
+    const { canceled, filePath } = await dialog.showSaveDialog(/** @type {BrowserWindow} */ (BrowserWindow.fromWebContents(e.sender)), {
       defaultPath: `Playdex library ${new Date().toISOString().slice(0, 10)}.csv`,
       filters: [{ name: 'CSV (Excel, Google Sheets)', extensions: ['csv'] }, { name: 'JSON', extensions: ['json'] }],
     });

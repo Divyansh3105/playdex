@@ -38,7 +38,7 @@ function regValue(key, name) {
   try {
     const out = execFileSync(path.join(SYSTEM, 'System32', 'reg.exe'), ['query', key, '/v', name],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return out.match(new RegExp(`${name}\\s+REG_SZ\\s+(.+)`))[1].trim();
+    return out.match(new RegExp(`${name}\\s+REG_SZ\\s+(.+)`))?.[1].trim();
   } catch { return undefined; }
 }
 
@@ -57,7 +57,7 @@ export function normalize(title) {
 // ("Fallout" + "Fallout - Amazon Luna"), which otherwise counts the same game twice.
 // Keep the installed copy, else one with a cover, else the plainest (shortest) title.
 export function dedupeWithinStores(games) {
-  const best = (a, b) => (!!b.installed - !!a.installed) || (!!b.cover - !!a.cover) || (a.title.length - b.title.length);
+  const best = (a, b) => (+!!b.installed - +!!a.installed) || (+!!b.cover - +!!a.cover) || (a.title.length - b.title.length);
   return [...Map.groupBy(games, g => `${g.store}:${g.key}`).values()].map(list => list.sort(best)[0]);
 }
 
@@ -222,8 +222,8 @@ export function steamPlaytimes(localconfig) {
 // Playtime lives per account in userdata/<account id>/config/localconfig.vdf.
 function steamPlaytimesFor(root, steamId) {
   const dirs = fs.readdirSync(path.join(root, 'userdata')).filter(d => /^\d+$/.test(d));
-  const account = /^\d{17}$/.test(steamId ?? '') ? String(BigInt(steamId) - 76561197960265728n) : undefined;
-  const dir = dirs.includes(account) ? account : dirs.length === 1 ? dirs[0] : null;
+  const account = steamId && /^\d{17}$/.test(steamId) ? String(BigInt(steamId) - 76561197960265728n) : undefined;
+  const dir = account && dirs.includes(account) ? account : dirs.length === 1 ? dirs[0] : null;
   if (!dir) throw new Error('several Steam accounts on this PC; add "steamId" to config.json');
   return steamPlaytimes(fs.readFileSync(path.join(root, 'userdata', dir, 'config/localconfig.vdf'), 'utf8'));
 }
@@ -238,6 +238,7 @@ async function scanSteam(notes, root) {
     catch (e) { notes.push(`Steam API: ${e.message}. Using Steam's local cache instead.`); }
   }
   owned ??= steamOwnedFromCache(root, installed);
+  /** @type {Map<string, { playtime: number, lastPlayed: number | undefined }> | null} */
   let times = null; // null = unknown, so the app shows nothing rather than "Not played"
   try {
     const loginusers = path.join(root, 'config/loginusers.vdf');
@@ -315,12 +316,13 @@ function scanGog(notes, src, galaxyExe) {
     // claim stubs, bundle entries, superseded releases like "Ultimate DOOM, The"). Same count as Galaxy.
     // Optional pieces: a malformed one (the DB is writable by other users) must not break the whole scan.
     const json = s => { try { return JSON.parse(s) ?? {}; } catch { return {}; } };
-    return db.prepare(`select lr.releaseKey as key, ${piece('title')} as title, ${piece('originalImages')} as images,
+    /** @typedef {{ key: string, title: string, images: string, summary: string, meta: string, minutes: number, lastPlayed: string }} GogRow */
+    return /** @type {GogRow[]} */ (db.prepare(`select lr.releaseKey as key, ${piece('title')} as title, ${piece('originalImages')} as images,
       ${piece('summary')} as summary, ${piece('meta')} as meta,
       (select max(minutesInGame) from GameTimes where releaseKey = lr.releaseKey) as minutes,
       (select max(lastPlayedDate) from LastPlayedDates where gameReleaseKey = lr.releaseKey) as lastPlayed
       from (select distinct l.releaseKey from LibraryReleases l join ReleaseProperties p on p.releaseKey = l.releaseKey
-            where l.releaseKey like 'gog_%' and p.isDlc = 0 and p.isVisibleInLibrary = 1) lr`).all()
+            where l.releaseKey like 'gog_%' and p.isDlc = 0 and p.isVisibleInLibrary = 1) lr`).all())
       .filter(r => r.title)
       .map(r => {
         // Size only for a folder that passes the launch check: a tampered path can't make us walk a whole drive.

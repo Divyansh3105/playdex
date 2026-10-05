@@ -32,7 +32,7 @@ beforeEach(async () => {
       prefs: async () => ({ favorites: [], hidden: [], tags: {} }),
       savePrefs: async p => p,
       details: async () => ({ description: 'Fake description' }),
-      launch: async () => true, uninstall: async () => true, exportLibrary: async () => null, openSettings() {},
+      launch: async () => true, uninstall: async () => true, exportLibrary: async () => null, openSettings: async () => {},
     };
   }, SCAN);
   await page.goto(PAGE);
