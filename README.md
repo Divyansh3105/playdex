@@ -23,7 +23,12 @@ window: search it once, launch any game through its own store, and see what you 
 
 ## Download
 
-Get the installer from the [latest release](https://github.com/Divyansh3105/playdex/releases/latest) (Windows),
+<a href="https://apps.microsoft.com/detail/9PMW08P8FQK8?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft"></a>
+
+**Recommended: [Playdex on the Microsoft Store](https://apps.microsoft.com/detail/9PMW08P8FQK8)** (Windows 10/11).
+The Store signs it, so it installs without warnings, including on PCs with Smart App Control, and updates itself.
+
+Or get the installer from the [latest release](https://github.com/Divyansh3105/playdex/releases/latest),
 or run from source:
 
 ```
@@ -38,9 +43,8 @@ it runs the tests, checks the tag matches `package.json`, builds, and attaches t
 The installer is per-user (no admin needed), lets you choose the folder, and adds Start menu + desktop shortcuts.
 Settings live in `%APPDATA%\Playdex` and are kept on uninstall.
 
-**The installer isn't code-signed.** Windows SmartScreen will warn ("Windows protected your PC" → More info → Run anyway),
-and on PCs with **Smart App Control** turned on Windows blocks it entirely. Signing the installer fixes both
-(see "Code signing" below). Until then, use `npm start` on those PCs.
+**The GitHub installer isn't code-signed.** Windows SmartScreen will warn ("Windows protected your PC" → More info → Run anyway),
+and on PCs with **Smart App Control** turned on Windows blocks it entirely. Use the Microsoft Store version there.
 
 ## Screenshots
 
