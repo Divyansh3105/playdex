@@ -28,7 +28,8 @@ export function appInfoFile(apps) {
 }
 
 /**
- * Steam folder. apps: { id, name, type, inLibrary = true, installed?: { size }, playtime?, lastPlayed? (unix s) }.
+ * Steam folder. apps: { id, name, type, inLibrary = true, opened?, installed?: { size }, playtime?, lastPlayed? (unix s) }.
+ * inLibrary: has library art cached; opened: has a file in the account's librarycache (its page was opened).
  * An app with no `type` is left out of appinfo.vdf (Steam has no info for it).
  */
 export function makeSteam(root, apps, accountId = 12345) {
@@ -37,6 +38,7 @@ export function makeSteam(root, apps, accountId = 12345) {
     `"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"${root.replace(/\\/g, '\\\\')}"\n\t}\n}\n`);
   for (const a of apps) {
     if (a.inLibrary !== false) fs.mkdirSync(path.join(root, 'appcache/librarycache', String(a.id)), { recursive: true });
+    if (a.opened) write(path.join(root, `userdata/${accountId}/config/librarycache/${a.id}.json`), '[]');
     if (a.installed) {
       write(path.join(root, `steamapps/appmanifest_${a.id}.acf`), `"AppState"\n{\n\t"appid"\t\t"${a.id}"\n\t"name"\t\t"${a.name}"\n`
         + `\t"installdir"\t\t"${a.name}"\n\t"SizeOnDisk"\t\t"${a.installed.size}"\n}\n`);

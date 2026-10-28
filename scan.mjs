@@ -179,11 +179,14 @@ async function steamOwnedViaApi(root, { steamApiKey, steamId }) {
   return new Map(games.map(g => [String(g.appid), g.name]));
 }
 
-// Without a key: Steam keeps a library-art folder per app in your library; appinfo.vdf says which are games.
-function steamOwnedFromCache(root, installed) {
-  const cacheDir = path.join(root, 'appcache/librarycache');
-  const cached = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).map(n => n.match(/^\d+/)?.[0]).filter(Boolean) : [];
-  const ids = [...new Set([...installed.keys(), ...cached])];
+// Without a key: Steam keeps a library-art folder per app in your library (appcache/librarycache), but it clears
+// that cache and refills it only as you browse. So also read the account's own librarycache, a file per app you've
+// opened, which it keeps. Together they match Steam's library; appinfo.vdf says which apps are games.
+// ponytail: an owned game missing from both (art evicted, never opened) is missed; the Web API key is exact.
+function steamOwnedFromCache(root, installed, userDir) {
+  const appIds = dir => (dir && fs.existsSync(dir) ? fs.readdirSync(dir).map(n => n.match(/^\d+/)?.[0]).filter(Boolean) : []);
+  const ids = [...new Set([...installed.keys(), ...appIds(path.join(root, 'appcache/librarycache')),
+    ...appIds(userDir && path.join(userDir, 'config/librarycache'))])];
   const info = parseAppInfo(fs.readFileSync(path.join(root, 'appcache/appinfo.vdf')), new Set(ids));
   return new Map(ids
     // Same as Steam's library list: games and applications (e.g. Wallpaper Engine); no DLC, tools or configs
@@ -219,13 +222,13 @@ export function steamPlaytimes(localconfig) {
   }]));
 }
 
-// Playtime lives per account in userdata/<account id>/config/localconfig.vdf.
-function steamPlaytimesFor(root, steamId) {
+// The account's own data (playtime, its librarycache) lives in userdata/<account id>.
+function steamUserDir(root, steamId) {
   const dirs = fs.readdirSync(path.join(root, 'userdata')).filter(d => /^\d+$/.test(d));
   const account = steamId && /^\d{17}$/.test(steamId) ? String(BigInt(steamId) - 76561197960265728n) : undefined;
   const dir = account && dirs.includes(account) ? account : dirs.length === 1 ? dirs[0] : null;
   if (!dir) throw new Error('several Steam accounts on this PC; add "steamId" to config.json');
-  return steamPlaytimes(fs.readFileSync(path.join(root, 'userdata', dir, 'config/localconfig.vdf'), 'utf8'));
+  return path.join(root, 'userdata', dir);
 }
 
 async function scanSteam(notes, root) {
@@ -237,13 +240,15 @@ async function scanSteam(notes, root) {
     try { owned = await steamOwnedViaApi(root, config); }
     catch (e) { notes.push(`Steam API: ${e.message}. Using Steam's local cache instead.`); }
   }
-  owned ??= steamOwnedFromCache(root, installed);
   /** @type {Map<string, { playtime: number, lastPlayed: number | undefined }> | null} */
   let times = null; // null = unknown, so the app shows nothing rather than "Not played"
+  let userDir;
   try {
     const loginusers = path.join(root, 'config/loginusers.vdf');
-    times = steamPlaytimesFor(root, config.steamId ?? (fs.existsSync(loginusers) ? parseLoginUsers(fs.readFileSync(loginusers, 'utf8')) : undefined));
+    userDir = steamUserDir(root, config.steamId ?? (fs.existsSync(loginusers) ? parseLoginUsers(fs.readFileSync(loginusers, 'utf8')) : undefined));
+    times = steamPlaytimes(fs.readFileSync(path.join(userDir, 'config/localconfig.vdf'), 'utf8'));
   } catch (e) { notes.push(`Steam playtime unavailable: ${e.message}.`); }
+  owned ??= steamOwnedFromCache(root, installed, userDir);
   const art = `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps`;
   return [...owned].map(([id, title]) => ({
     id: `steam:${id}`, store: 'steam', title, installed: installed.has(id),

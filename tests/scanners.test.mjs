@@ -25,6 +25,7 @@ makeSteam(paths.steam, [
   { id: 104, name: 'Delisted Classic', type: 'Game' },              // gone from the store, still owned
   { id: 105, name: 'Destiny Two', type: 'game' },                   // lowercase type, also on Epic
   { id: 106, name: 'Unknown App' },                                 // no appinfo entry: skipped
+  { id: 107, name: 'Evicted Art', type: 'Game', inLibrary: false, opened: true }, // Steam cleared its art; still owned
 ]);
 
 makeEpic(paths.epic, [
@@ -63,8 +64,8 @@ test('no scanner errors or notes on healthy data', () => {
   assert.deepEqual(result.notes, []);
 });
 
-test('Steam: games and applications, including delisted; no DLC, tools or unknown apps', () => {
-  assert.deepEqual(titles('steam'), ['Delisted Classic', 'Destiny Two', 'Half Game', 'Wallpaper App']);
+test('Steam: games and applications, including delisted and art-evicted; no DLC, tools or unknown apps', () => {
+  assert.deepEqual(titles('steam'), ['Delisted Classic', 'Destiny Two', 'Evicted Art', 'Half Game', 'Wallpaper App']);
 });
 
 test('Epic: games and creator kits; no DLC, Unreal Engine or Twinmotion; "?" damage repaired', () => {
@@ -132,7 +133,7 @@ test('cross-store duplicates', () => {
 test('a missing launcher only affects its own store', async () => {
   const r = await scanAll(path.join(tmp, 'appdata'), { ...paths, epic: path.join(tmp, 'nope') });
   assert.ok(r.errors.epic);
-  assert.equal(r.games.filter(g => g.store === 'steam').length, 4);
+  assert.equal(r.games.filter(g => g.store === 'steam').length, 5);
   assert.equal(r.games.filter(g => g.store === 'gog').length, 4);
 });
 
@@ -141,5 +142,5 @@ test('a broken config.json is reported and ignored', async () => {
   fs.writeFileSync(path.join(tmp, 'broken', 'config.json'), '{ not json');
   const r = await scanAll(path.join(tmp, 'broken'), paths);
   assert.match(r.notes.join(' '), /config\.json is not valid JSON/);
-  assert.equal(r.games.filter(g => g.store === 'steam').length, 4);
+  assert.equal(r.games.filter(g => g.store === 'steam').length, 5);
 });

@@ -77,7 +77,7 @@ and on PCs with **Smart App Control** turned on Windows blocks it entirely. Use 
 
 | Store | Owned games | Installed games |
 |---|---|---|
-| Steam | `appcache/librarycache` folders; name + type from Steam's own `appcache/appinfo.vdf` | `steamapps/appmanifest_*.acf` |
+| Steam | `appcache/librarycache` folders plus the account's `userdata/<id>/config/librarycache` (Steam clears the first and refills it as you browse); name + type from Steam's own `appcache/appinfo.vdf`. A Steam Web API key in Settings gives the exact list | `steamapps/appmanifest_*.acf` |
 | Epic | `C:\ProgramData\Epic\EpicGamesLauncher\Data\Catalog\catcache.bin` | `...\Data\Manifests\*.item` |
 | GOG | Galaxy's `galaxy-2.0.db` (copied to temp before reading) | same DB |
 
