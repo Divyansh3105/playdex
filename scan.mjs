@@ -256,6 +256,7 @@ async function scanSteam(notes, root) {
     playtime: times ? (times.get(id)?.playtime ?? 0) : null, lastPlayed: times?.get(id)?.lastPlayed,
     cover: `${art}/${id}/library_600x900.jpg`,
     fallback: `${art}/${id}/header.jpg`,
+    hero: `${art}/${id}/library_hero.jpg`, // wide art behind the details window
     launch: uriLaunch(installed.has(id) ? `steam://rungameid/${id}` : `steam://install/${id}`),
     uninstall: installed.has(id) ? uriLaunch(`steam://uninstall/${id}`) : null, // Steam asks to confirm
   }));

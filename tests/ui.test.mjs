@@ -10,12 +10,14 @@ const game = (store, id, title, more) => ({ id: `${store}:${id}`, store, key: ti
   installed: false, size: null, drive: null, playtime: null, lastPlayed: null, uninstall: false, ...more });
 
 // Alpha is owned twice (Steam + Epic). Epic never tracks playtime. Beta is tracked but never played.
-const alpha = game('steam', 1, 'Alpha', { installed: true, size: 10 * GB, drive: 'C:\\', playtime: 600, lastPlayed: Date.now() - 2 * 864e5 });
+// Delta's title is too long for a card, so it must be cut short, not widen its column.
+const DELTA = "Delta's Very Long Journey Through the Forgotten Kingdoms";
+const alpha = game('steam', 1, 'Alpha', { installed: true, uninstall: true, size: 10 * GB, drive: 'C:\\', playtime: 600, lastPlayed: Date.now() - 2 * 864e5 });
 const GAMES = [
   alpha,
   game('epic', 'a2', 'Alpha'),
   game('gog', 3, 'Beta', { installed: true, size: 5 * GB, drive: 'C:\\', playtime: 0 }),
-  game('epic', 'd4', 'Delta'),
+  game('epic', 'd4', DELTA),
   game('steam', 5, 'Gamma', { playtime: 90 }),
 ];
 const SCAN = { games: GAMES, duplicates: [{ title: 'Alpha', games: [GAMES[0], GAMES[1]] }], errors: {}, notes: [],
@@ -40,15 +42,16 @@ beforeEach(async () => {
 });
 afterEach(() => page.close());
 
-const names = () => page.locator('.card .name').allTextContents();
-const stores = () => page.locator('.card .badge').allTextContents();
+// The main Library grid (not the Recently played row): one card per game, and each card's stores.
+const names = () => page.locator('#games .name').allTextContents();
+const stores = () => page.locator('#games .card').evaluateAll(cards => cards.map(c => [...c.querySelectorAll('.store')].map(s => s.textContent).join('+')));
 
 test('header counts a game owned twice once, and once per store', async () => {
   assert.equal(await page.locator('#stats').textContent(), '4 gamesSteam 2Epic 2GOG 1');
   assert.equal(await page.locator('#dup-count').textContent(), '1');
 });
 
-test('Stats tab: totals, hours, share played, disk use', async () => {
+test('Stats tab: totals, hours, share played, disk use, per store', async () => {
   await page.click('#tab-stats');
   const tiles = await page.locator('.tile').allInnerTexts();
   assert.deepEqual(tiles.map(t => t.replace(/\s+/g, ' ')), [
@@ -56,17 +59,21 @@ test('Stats tab: totals, hours, share played, disk use', async () => {
     '12 h played in total',      // 600 + 90 + 0 min = 11.5 h, rounded
     '67% played (1 not yet)',    // Alpha and Gamma of the 3 tracked games (Epic doesn't count)
     '15.0 GB on disk',
+    '2 Steam · 12 h played', '2 Epic · playtime not tracked', '1 GOG · 0 h played',
   ]);
   assert.deepEqual(await page.locator('.statlist .title .link').allTextContents(), ['Alpha', 'Gamma']); // most played
 });
 
-test('store chips, search and the Show menu filter the library', async () => {
-  assert.deepEqual(await names(), ['Alpha', 'Alpha', 'Beta', 'Delta', 'Gamma']);
-  await page.click('.chip.steam');
+test('a game owned on two stores is one card; store filters, search and the Show menu filter it', async () => {
+  assert.deepEqual(await names(), ['Alpha', 'Beta', DELTA, 'Gamma']);
+  assert.deepEqual(await stores(), ['Steam+Epic', 'GOG', 'Epic', 'Steam']);
+  await page.click('#filter-steam');
   assert.deepEqual(await stores(), ['Epic', 'GOG', 'Epic']);
-  await page.click('.chip.steam');
+  await page.click('#filter-steam');
   await page.fill('#q', 'ALP');
-  assert.deepEqual(await stores(), ['Steam', 'Epic']);
+  assert.deepEqual(await stores(), ['Steam+Epic']);
+  await page.fill('#q', 'deltas');
+  assert.deepEqual(await names(), [DELTA]); // search ignores punctuation
   await page.fill('#q', '');
   await page.selectOption('#show', 'unplayed');
   assert.deepEqual(await names(), ['Beta']); // Epic games never count as not played
@@ -74,21 +81,52 @@ test('store chips, search and the Show menu filter the library', async () => {
   assert.deepEqual(await names(), ['Alpha', 'Beta']);
 });
 
-test('sort by playtime puts untracked (Epic) games last', async () => {
-  await page.selectOption('#sort', 'playtime');
-  assert.deepEqual(await names(), ['Alpha', 'Gamma', 'Beta', 'Alpha', 'Delta']);
-  assert.deepEqual(await stores(), ['Steam', 'Steam', 'GOG', 'Epic', 'Epic']);
+test('Recently played row: installed games you played, only on the plain library', async () => {
+  assert.deepEqual(await page.locator('.recent .name').allTextContents(), ['Alpha']);
+  await page.fill('#q', 'a');
+  assert.equal(await page.locator('.recent').count(), 0);
 });
 
-test('keyboard shortcuts: / search, Esc clear, 1–4 tabs, P pick', async () => {
+test('a long title keeps its card the width of the others', async () => {
+  const widths = await page.locator('.card').evaluateAll(cards => cards.map(c => Math.round(c.getBoundingClientRect().width)));
+  assert.equal(new Set(widths).size, 1, `card widths: ${widths}`);
+});
+
+test('installed games have a Play button; Library-only controls hide on other tabs', async () => {
+  assert.equal(await page.locator('#games .quick').count(), 2); // Alpha (its Steam copy), Beta
+  await page.locator('.cell').first().hover();
+  await page.click('.quick >> nth=0');
+  assert.equal(await page.textContent('#toast:popover-open'), 'Opening Alpha in Steam…');
+  await page.click('#tab-stats');
+  assert.deepEqual(await Promise.all(['#sort', '#show', '#pick'].map(s => page.isHidden(s))), [true, true, true]);
+});
+
+test('sort by playtime puts untracked (Epic) games last', async () => {
+  await page.selectOption('#sort', 'playtime');
+  assert.deepEqual(await names(), ['Alpha', 'Gamma', 'Beta', DELTA]);
+});
+
+test('Duplicates hint counts what the search leaves', async () => {
+  await page.click('#tab-dups');
+  assert.match(await page.textContent('.hint'), /^You own 1 games on more than one store/);
+  await page.fill('#q', 'beta');
+  assert.match(await page.textContent('.hint'), /^0 of the 1 games you own on more than one store match/);
+});
+
+test('keyboard shortcuts: / search, Esc clear, 1–4 tabs, arrow keys, P pick', async () => {
   await page.keyboard.press('/');
   await page.keyboard.type('gam');
   assert.deepEqual(await names(), ['Gamma']);
   await page.keyboard.press('Escape');
   assert.equal(await page.inputValue('#q'), '');
-  assert.equal((await names()).length, 5);
+  assert.equal((await names()).length, 4);
   await page.keyboard.press('Escape'); // second Esc leaves the search box, so number keys switch tabs
   await page.keyboard.press('4');
+  assert.equal(await page.getAttribute('#tab-stats', 'aria-selected'), 'true');
+  await page.focus('#tab-stats');
+  await page.keyboard.press('ArrowRight'); // wraps around
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'tab-library');
+  await page.keyboard.press('End');
   assert.equal(await page.getAttribute('#tab-stats', 'aria-selected'), 'true');
   await page.keyboard.press('1');
   await page.keyboard.press('p');
@@ -96,12 +134,24 @@ test('keyboard shortcuts: / search, Esc clear, 1–4 tabs, P pick', async () => 
   assert.ok(['Alpha', 'Beta'].includes(await page.textContent('#details-title'))); // installed games first
 });
 
-test('favorite a game from its details window', async () => {
-  await page.locator('.card').first().click();
+test('details window: a button per store, Uninstall for installed copies; favorite applies to every copy', async () => {
+  await page.locator('#games .card').first().click();
+  assert.deepEqual(await page.locator('#details .stores button').allTextContents(),
+    ['▶ Play · Steam', '⬇ Install · Epic', 'Uninstall from Steam…']);
   await page.click('text=☆ Favorite');
   assert.equal(await page.getAttribute('.toggle-btn >> nth=0', 'aria-pressed'), 'true');
   await page.click('#details-close');
   await page.selectOption('#show', 'favorites');
-  assert.deepEqual(await stores(), ['Steam']);
+  assert.deepEqual(await stores(), ['Steam+Epic']);
+  await page.click('#filter-steam');
+  assert.deepEqual(await stores(), ['Epic']); // the Epic copy is a favorite too
   assert.equal(await page.locator('.card .fav').count(), 1);
+});
+
+test('a change that fails to save is undone on screen', async () => {
+  await page.evaluate(() => { window.library.savePrefs = async () => { throw new Error('disk full'); }; });
+  await page.locator('#games .card').first().click();
+  await page.click('text=☆ Favorite');
+  assert.equal(await page.textContent('#toast:popover-open'), 'Could not save your change.'); // above the details window
+  assert.equal(await page.getAttribute('.toggle-btn >> nth=0', 'aria-pressed'), 'false');
 });

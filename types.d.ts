@@ -10,6 +10,7 @@ interface Game {
   title: string;
   cover?: string | null;
   fallback?: string;
+  hero?: string;           // wide art for the details window (Steam)
   installed: boolean;
   size?: number | null;    // bytes
   drive?: string | null;   // "C:\"

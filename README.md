@@ -15,9 +15,10 @@ window: search it once, launch any game through its own store, and see what you 
 ## Features
 
 - **One library** across Steam, Epic and GOG: no logins, no API keys, nothing uploaded. Counts match each launcher's own.
+- **One card per game**, however many stores you own it on, with **Recently played** on top and **▶ Play** on hover.
 - **Duplicates:** games you own on more than one store.
 - **Playtime and last played** (Steam and GOG), a **Not played** filter, and **🎲 What should I play?** for the backlog.
-- **Stats:** totals, hours played, the share of your library you've played, and your most played games.
+- **Stats:** totals, hours played, the share of your library you've played, per-store totals, and your most played games.
 - **Disk space:** free space per drive, games largest first, and **Uninstall…** through the game's own store.
 - **Favorites, hidden games and tags**, **Export** to CSV or JSON, **auto-refresh** and **keyboard shortcuts**.
 

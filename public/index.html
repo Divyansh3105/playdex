@@ -20,22 +20,19 @@
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
   #stats { color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-  nav { position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  nav { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
         padding: 12px 24px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px);
         border-bottom: 1px solid var(--line); }
   .tabs { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-  .tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+  .tabs button { border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); }
   .tabs button[aria-selected="true"] { background: var(--line); color: var(--text); }
   .count { margin-left: 6px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #0b0d12; font-size: 12px; font-weight: 600; }
-  input[type="search"] { flex: 1; min-width: 160px; max-width: 320px; padding: 7px 12px; border-radius: 8px;
+  input[type="search"] { flex: 1 1 160px; min-width: 120px; max-width: 320px; padding: 7px 12px; border-radius: 8px; /* starts small, so the nav wraps late */
                          border: 1px solid var(--line); background: var(--panel); }
-  .chip { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); }
-  .chip[aria-pressed="true"] { color: var(--text); border-color: currentColor; }
-  .chip.steam[aria-pressed="true"] { color: var(--steam); }
-  .chip.epic[aria-pressed="true"] { color: var(--epic); }
-  .chip.gog[aria-pressed="true"] { color: var(--gog); }
+  .filter { cursor: pointer; font-size: 12px; padding: 3px 9px; }
+  .filter:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+  .filter[aria-pressed="false"] { color: var(--muted); border-style: dashed; opacity: .6; }
   #sort, #show, #pick { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
-  #sort:disabled, #show:disabled, #pick:disabled { opacity: .45; cursor: default; }
   #sort option, #show option, #show optgroup { background: var(--panel); }
   .fav { color: #facc15; flex: none; }
 
@@ -51,7 +48,12 @@
   .tag button:hover { color: var(--text); background: #3a4152; }
   .tag-input { flex: 1; min-width: 140px; max-width: 220px; padding: 5px 10px; border-radius: 999px; border: 1px dashed var(--line); background: none; }
   .tag-input:focus { border-style: solid; }
-  .card .sub { margin-top: -4px; min-height: 1.4em; font-size: 12px; color: var(--muted); } /* min-height keeps rows aligned */
+  .card .sub { display: flex; gap: 8px; margin-top: -4px; min-height: 1.4em; font-size: 12px; color: var(--muted); } /* min-height keeps rows aligned */
+  .card .sub { white-space: nowrap; }
+  .card .sub > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* one line, cut short */
+  .card .store { font-weight: 600; }
+  .store.steam { color: var(--steam); } .store.epic { color: var(--epic); } .store.gog { color: var(--gog); }
+  .section:first-child { margin-top: 0; }
   label.toggle { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
   #rescan, #export, #settings { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
   .actions { margin-left: auto; display: flex; gap: 8px; } /* app-wide actions; the nav holds what changes the view */
@@ -63,10 +65,13 @@
                    border: 1px solid var(--line); transition: transform .15s ease, box-shadow .15s ease; }
   .ph { display: grid; place-items: center; padding: 12px; text-align: center; color: var(--muted); font-weight: 600;
         background: linear-gradient(160deg, #1d2230, #12151c); }
-  .card:hover img, .card:hover .ph, .card:focus-visible img { transform: translateY(-3px); box-shadow: 0 10px 24px #0008; }
+  .cell { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); } /* minmax(0, …): a long title gets cut short instead of widening the card */
+  .cell:hover img, .cell:hover .ph, .card:focus-visible img { transform: translateY(-3px); box-shadow: 0 10px 24px #0008; }
   .action { position: absolute; top: 8px; left: 8px; right: 8px; padding: 6px; border-radius: 6px; text-align: center;
             background: #000c; font-weight: 600; opacity: 0; transition: opacity .15s; }
-  .card:hover .action, .card:focus-visible .action { opacity: 1; }
+  .cell:hover .action, .card:focus-visible .action, .quick:focus-visible { opacity: 1; }
+  .quick { top: 5px; border: 0; cursor: pointer; background: var(--ok); color: #052e16; } /* 5px: rides the lifted cover */
+  .quick:hover { filter: brightness(1.12); }
   .meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; background: none; }
@@ -100,32 +105,42 @@
   .disklist { display: grid; gap: 6px; max-width: 1240px; }
   .diskrow { display: grid; grid-template-columns: 34px minmax(140px, 2fr) minmax(80px, 3fr) 80px 40px 96px; gap: 14px; align-items: center;
              padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; text-align: left; }
-  .statlist .diskrow { grid-template-columns: 34px minmax(180px, 2fr) minmax(80px, 3fr) 80px 110px; } /* last played instead of drive + uninstall */
+  .statlist { max-width: 900px; } /* shorter bars */
+  .statlist .diskrow { grid-template-columns: 24px minmax(180px, 2fr) minmax(80px, 3fr) 80px 110px; padding: 5px 12px; } /* last played instead of drive + uninstall */
+  .statlist .diskrow img, .statlist .diskrow .ph { width: 24px; }
   .diskrow:hover { border-color: #3a4152; }
   .diskrow img, .diskrow .ph { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; font-size: 0; padding: 0; }
   .diskrow .title { display: flex; gap: 8px; align-items: center; min-width: 0; }
   .diskrow .title > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .uninstall { border: 1px solid var(--line); background: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); }
   .uninstall:hover { color: #fca5a5; border-color: #7f1d1d; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; max-width: 1240px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; max-width: 1240px; } /* auto-fit: no gap on the right */
   .tile { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+  .tile.steam { border-top: 2px solid var(--steam); } .tile.epic { border-top: 2px solid var(--epic); } .tile.gog { border-top: 2px solid var(--gog); }
   .tile strong { display: block; margin-bottom: 2px; font-size: 24px; color: var(--text); font-variant-numeric: tabular-nums; }
   .section { margin: 24px 0 10px; font-size: 15px; }
   .diskrow .size { text-align: right; font-variant-numeric: tabular-nums; }
   .diskrow .where { color: var(--muted); font-size: 12px; }
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
-           background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; transition: .2s; }
-  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  /* A popover, so it shows in the top layer, above the details window too */
+  #toast { inset: auto auto 20px 50%; margin: 0; max-width: calc(100vw - 32px); transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+           color: var(--text); background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px;
+           transition: opacity .2s, transform .2s, overlay .2s allow-discrete, display .2s allow-discrete; }
+  #toast:popover-open { opacity: 1; transform: translate(-50%, 0); }
+  @starting-style { #toast:popover-open { opacity: 0; transform: translate(-50%, 20px); } }
   .link { all: unset; cursor: pointer; } .link:hover { text-decoration: underline; }
   .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   #details { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow: auto;
              color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
   #details::backdrop { background: #000a; backdrop-filter: blur(3px); }
-  #details-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 8px;
+  #details-close { position: absolute; z-index: 1; top: 10px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 8px;
                    background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
   #details-close:hover { background: var(--line); color: var(--text); }
-  #details-content { display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 24px; }
+  #details-content { position: relative; display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 24px; }
+  #details-content > :not(.hero) { position: relative; } /* above the hero */
+  #details .hero { position: absolute; inset: 0 0 auto; height: 300px; overflow: hidden; pointer-events: none;
+                   mask-image: linear-gradient(#000 30%, transparent); }
+  #details .hero img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.15); filter: blur(24px) saturate(1.2); opacity: .5; }
   #details .art img, #details .art .ph { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
   #details h2 { margin: 0 40px 14px 0; font-size: 22px; line-height: 1.25; }
   #details .stores { margin-bottom: 18px; }
@@ -144,7 +159,7 @@
 <body>
 <header>
   <h1>Playdex</h1>
-  <div id="stats"></div>
+  <div id="stats"><span id="total"></span></div>
   <div class="actions">
     <button id="rescan" title="Rescan your launchers (F5)" aria-keyshortcuts="F5">Rescan</button>
     <button id="export" title="Save your library as a CSV or JSON file">Export</button>
@@ -152,14 +167,13 @@
   </div>
 </header>
 <nav>
-  <div class="tabs" role="tablist">
-    <button role="tab" id="tab-library" aria-selected="true">Library</button>
-    <button role="tab" id="tab-dups" aria-selected="false">Duplicates<span class="count" id="dup-count">0</span></button>
-    <button role="tab" id="tab-disk" aria-selected="false">Disk space</button>
-    <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
+  <div class="tabs" role="tablist" id="tabs" aria-label="Views">
+    <button role="tab" id="tab-library" aria-controls="view" aria-selected="true">Library</button>
+    <button role="tab" id="tab-dups" aria-controls="view" aria-selected="false" tabindex="-1">Duplicates<span class="count" id="dup-count">0</span></button>
+    <button role="tab" id="tab-disk" aria-controls="view" aria-selected="false" tabindex="-1">Disk space</button>
+    <button role="tab" id="tab-stats" aria-controls="view" aria-selected="false" tabindex="-1">Stats</button>
   </div>
   <input type="search" id="q" placeholder="Search games…" aria-label="Search games" aria-keyshortcuts="/ Control+F" title="Search (/ or Ctrl+F). Press ? for all shortcuts.">
-  <div id="chips" style="display:flex;gap:6px"></div>
   <select id="sort" aria-label="Sort games">
     <option value="name">Name (A–Z)</option>
     <option value="recent">Recently played</option>
@@ -169,8 +183,8 @@
   <select id="show" aria-label="Show"><option value="all">All games</option></select>
   <button id="pick" title="Opens a random game from the games shown, installed ones first (P)" aria-keyshortcuts="P">🎲 What should I play?</button>
 </nav>
-<main id="view"></main>
-<div id="toast" role="status"></div>
+<main id="view" role="tabpanel" aria-labelledby="tab-library"></main>
+<div id="toast" role="status" popover="manual"></div>
 <dialog id="details" aria-labelledby="details-title">
   <button id="details-close" aria-label="Close">×</button>
   <div id="details-content"></div>
