@@ -7,14 +7,15 @@ Playdex collects no personal data. It has no accounts, analytics, ads or trackin
 ## What stays on your PC
 
 - Your game list, which Playdex reads from the Steam, Epic Games and GOG Galaxy files already on your PC.
-- Your favorites, hidden games, tags and settings, saved in Playdex's own folder (`%APPDATA%\Playdex`).
+- Your favorites, hidden games, tags, "same game" links and settings, saved in Playdex's own folder (`%APPDATA%\Playdex`).
+- Cover images it has downloaded, kept in `%APPDATA%\Playdex\covers` so they show without internet.
 - Files you export (CSV or JSON), saved only where you choose.
 
 ## What Playdex downloads
 
 Playdex connects only to the stores, and only to show your games:
 
-- **Cover images** from the Steam, Epic Games and GOG image servers.
+- **Cover images** from the Steam, Epic Games and GOG image servers, once per image.
 - **Game details** (description, developer, release date, genres) from the Steam Store when you open a game. It sends the game's Steam ID, or its title if it doesn't have one.
 - **Your Steam library**, only if you enter your own Steam Web API key in Settings (saved in `config.json`). Playdex sends the key and your Steam ID to Steam's official API (`api.steampowered.com`) to list the games you own. The key stays in `config.json` on your PC and goes only to Steam.
 

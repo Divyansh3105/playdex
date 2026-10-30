@@ -21,6 +21,8 @@ window: search it once, launch any game through its own store, and see what you 
 - **Stats:** totals, hours played, the share of your library you've played, per-store totals, and your most played games.
 - **Disk space:** free space per drive, games largest first, and **Uninstall…** through the game's own store.
 - **Favorites, hidden games and tags**, **Export** to CSV or JSON, **auto-refresh** and **keyboard shortcuts**.
+- **Same game as…:** link a game whose name differs between stores, so it's one game everywhere.
+- **Covers offline:** each cover is downloaded once and kept in `%APPDATA%\Playdex\covers`.
 
 ## Download
 

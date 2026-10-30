@@ -21,6 +21,7 @@
       "main.mjs",
       "preload.cjs",
       "scan.mjs",
+      "scan-worker.mjs",
       "details.mjs",
       "prefs.mjs",
       "export.mjs",

@@ -1,22 +1,63 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, utilityProcess } from 'electron';
 import fs from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { scanAll } from './scan.mjs';
 import { gameDetails } from './details.mjs';
 import { loadPrefs, savePrefs, loadSettings, saveSettings } from './prefs.mjs';
 import { exportRows, toCsv } from './export.mjs';
 
 const ORIGIN = 'app://playdex/';
 const PUBLIC = new URL('./public/', import.meta.url);
-const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'] }; // nothing else is served
-// Only our own script runs; images only from https CDNs; no other requests, forms or plugins.
-const CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https:; base-uri 'none'; form-action 'none'";
+const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'] }; // and /cover, below
+// Only our own script runs; images from our cover cache or https CDNs; no other requests, forms or plugins.
+const CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' https:; base-uri 'none'; form-action 'none'";
+
+// Covers, fetched once from the stores' image servers and kept in <userData>/covers, so they show offline too.
+// Only these hosts: the URLs come from launcher files other users can edit.
+// ponytail: no eviction; a few hundred covers is ~50 MB. Prune by age if libraries get huge.
+const COVER_HOSTS = /(^|\.)(steamstatic\.com|epicgames\.com|gog\.com)$/;
+const coverUrl = u => (typeof u === 'string' ? `${ORIGIN}cover?u=${encodeURIComponent(u)}` : u);
+async function cover(u) {
+  let url;
+  try { url = new URL(u ?? ''); } catch { return null; }
+  if (url.protocol !== 'https:' || !COVER_HOSTS.test(url.hostname)) return null;
+  const file = path.join(app.getPath('userData'), 'covers', createHash('sha256').update(url.href).digest('hex'));
+  try { return await fs.readFile(file); } catch { /* not cached yet */ }
+  const r = await fetch(url, { signal: AbortSignal.timeout(15000) }).catch(() => null);
+  if (!r?.ok || !r.headers.get('content-type')?.startsWith('image/')) return null;
+  const body = Buffer.from(await r.arrayBuffer());
+  if (body.length > 10 * 2 ** 20) return null;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${randomUUID()}.tmp`; // whole files only: another request may read it any moment
+  await fs.writeFile(tmp, body);
+  await fs.rename(tmp, file).catch(() => fs.rm(tmp, { force: true }));
+  return body;
+}
 
 let games = new Map(); // game id -> game from the last scan, with the launch/uninstall argv scan.mjs built and validated
-/** @type {ReturnType<typeof scanAll> | null} */
+/** @typedef {ReturnType<typeof import('./scan.mjs').scanAll>} Scan */
+/** @type {Scan | null} */
 let scanning = null;   // one scan at a time; parallel calls share it
+
+// Scans run in scan-worker.mjs, started on first use and kept for the next scans.
+/** @type {Electron.UtilityProcess | null} */
+let worker = null;
+/** @param {string} dir @returns {Scan} */
+function scanInWorker(dir) {
+  worker ??= utilityProcess.fork(fileURLToPath(new URL('./scan-worker.mjs', import.meta.url)), [], { serviceName: 'Playdex scanner' });
+  const child = worker;
+  return new Promise((resolve, reject) => {
+    const exited = () => { worker = null; reject(new Error('The scanner stopped unexpectedly. Try Rescan.')); }; // next scan starts a new one
+    child.once('exit', exited);
+    child.once('message', m => {
+      child.off('exit', exited);
+      m.error ? reject(new Error(m.error)) : resolve(m.result);
+    });
+    child.postMessage(dir);
+  });
+}
 
 // A real origin (instead of file://) so 'self' in the CSP means exactly our two files.
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
@@ -27,6 +68,10 @@ const fromApp = e => e.senderFrame?.url.startsWith(ORIGIN) === true;
 app.whenReady().then(() => {
   protocol.handle('app', async req => {
     const url = new URL(req.url);
+    if (url.host === 'playdex' && url.pathname === '/cover') { // the image decoder sniffs the type, so none is sent
+      const body = await cover(url.searchParams.get('u'));
+      return body ? new Response(body) : new Response('Not found', { status: 404 }); // 404: the page tries its fallback
+    }
     const file = url.host === 'playdex' && FILES[url.pathname];
     if (!file) return new Response('Not found', { status: 404 });
     return new Response(await fs.readFile(new URL(file[0], PUBLIC)),
@@ -38,11 +83,13 @@ app.whenReady().then(() => {
   ipcMain.handle('scan', async e => {
     if (!fromApp(e)) throw new Error('Forbidden');
     // %APPDATA%\Playdex: holds config.json (Steam key).
-    scanning ??= scanAll(app.getPath('userData')).finally(() => { scanning = null; });
+    scanning ??= scanInWorker(app.getPath('userData')).finally(() => { scanning = null; });
     const result = await scanning;
     games = new Map(result.games.map(g => [g.id, g]));
     // Commands stay in this process; the page only sends back a game id. It just learns whether uninstall is possible.
-    return JSON.parse(JSON.stringify(result, (k, v) => (k === 'launch' ? undefined : k === 'uninstall' ? !!v : v)));
+    // Images go through the cover cache.
+    return JSON.parse(JSON.stringify(result, (k, v) => (k === 'launch' ? undefined : k === 'uninstall' ? !!v
+      : ['cover', 'fallback', 'hero'].includes(k) ? coverUrl(v) : v)));
   });
 
   const run = argv => {
