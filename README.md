@@ -10,7 +10,7 @@ then GOG Galaxy, searching each one because I couldn't remember which store had 
 the same game on two of them. Playdex reads every launcher's data on your PC and shows the whole library in one
 window: search it once, launch any game through its own store, and see what you own twice.
 
-![Demo: the library, the Not played filter, What should I play?, the Stats tab and the Disk space tab](docs/demo.gif)
+![Demo: Recently played, search, the Not played filter, What should I play?, the Stats, Disk space and Duplicates tabs, and Settings](docs/demo.gif)
 
 ## Features
 
