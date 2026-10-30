@@ -158,6 +158,17 @@ function folderSize(dir) {
   } catch { return undefined; }
 }
 
+// GOG sizes kept between scans: an auto-refresh rescans on every return to the window, and walking every file of
+// every install each time can stall it. Recomputed when the folder's or its goggame-<id>.info's change time moves,
+// as when files are added to or removed from the top of the folder (an install, an uninstall) or the .info is rewritten.
+// ponytail: a patch that only changes files deeper inside keeps the old size until Playdex restarts
+const gogSizes = new Map(); // folder -> { stamp, size }
+function gogFolderSize(dir, productId) {
+  const stamp = [dir, path.join(dir, `goggame-${productId}.info`)].map(f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } }).join();
+  if (gogSizes.get(dir)?.stamp !== stamp) gogSizes.set(dir, { stamp, size: folderSize(dir) });
+  return gogSizes.get(dir).size;
+}
+
 // Steam ID of the most recently logged-in account in config/loginusers.vdf (first one if none is marked).
 export function parseLoginUsers(vdf) {
   const users = [...vdf.matchAll(/"(\d{17})"\s*\{([^}]*)\}/g)];
@@ -336,7 +347,7 @@ function scanGog(notes, src, galaxyExe) {
         const verified = dir != null && gogLaunch('x', r.key.slice(4), dir) != null;
         return {
         id: `gog:${r.key}`, store: 'gog', title: JSON.parse(r.title).title, installed: installed.has(r.key),
-        size: verified ? folderSize(dir) : undefined, drive: verified ? driveOf(dir) : undefined,
+        size: verified ? gogFolderSize(dir, r.key.slice(4)) : undefined, drive: verified ? driveOf(dir) : undefined,
         playtime: Number.isFinite(r.minutes) && r.minutes > 0 ? r.minutes : 0,
         // "2024-12-15 07:22:03" (UTC); unparseable -> unknown
         lastPlayed: Date.parse(String(r.lastPlayed ?? '').replace(' ', 'T') + 'Z') || undefined,

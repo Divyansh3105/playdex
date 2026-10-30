@@ -144,3 +144,13 @@ test('a broken config.json is reported and ignored', async () => {
   assert.match(r.notes.join(' '), /config\.json is not valid JSON/);
   assert.equal(r.games.filter(g => g.store === 'steam').length, 5);
 });
+
+test('GOG install sizes are kept between scans until the folder changes', async () => {
+  const size = async () => (await scanAll(path.join(tmp, 'appdata'), paths)).games.find(g => g.title === 'Fallout')?.size;
+  fs.mkdirSync(path.join(gogInstall, 'data')); // a new entry at the top: the folder changed
+  const before = await size();
+  fs.writeFileSync(path.join(gogInstall, 'data', 'deep.bin'), Buffer.alloc(100)); // deeper inside: the kept size stays
+  assert.equal(await size(), before);
+  fs.writeFileSync(path.join(gogInstall, 'patch.bin'), Buffer.alloc(10)); // at the top again: measured again
+  assert.equal(await size(), before + 100 + 10);
+});
