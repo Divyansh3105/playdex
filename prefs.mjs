@@ -1,4 +1,4 @@
-// Favorites, hidden games and tags, saved in <userData>/library.json (%APPDATA%\Playdex on Windows).
+// Favorites, hidden games, tags and "same game" links, saved in <userData>/library.json (%APPDATA%\Playdex on Windows).
 // Keyed by game id (one store's copy), so you can hide the Epic copy of a game and keep the Steam one.
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +16,11 @@ export function cleanPrefs(p) {
     .map(([id, list]) => [id, [...new Set(list.filter(t => typeof t === 'string')
       .map(t => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, TAG_LEN)).filter(Boolean))].slice(0, MAX_TAGS)])
     .filter(([, list]) => list.length));
-  return { favorites: ids(p?.favorites), hidden: ids(p?.hidden), tags };
+  // same: game id -> the key of the game you said it is (one game, a different name on another store)
+  const sameSrc = p && typeof p.same === 'object' && !Array.isArray(p.same) ? p.same : {};
+  const same = Object.fromEntries(Object.entries(sameSrc).slice(0, MAX_IDS)
+    .filter(([id, key]) => ID.test(id) && typeof key === 'string' && /^[^\u0000-\u001f\u007f]{1,200}$/.test(key)));
+  return { favorites: ids(p?.favorites), hidden: ids(p?.hidden), tags, same };
 }
 
 const fileIn = dir => path.join(dir, 'library.json');
@@ -30,6 +34,35 @@ export async function loadPrefs(dir) {
     await fs.rename(fileIn(dir), `${fileIn(dir)}.bad-${Date.now()}`).catch(() => {});
     return cleanPrefs({});
   }
+}
+
+// ---------- settings: config.json (Steam Web API key and Steam ID) ----------
+// Read by scan.mjs; written by the Settings window. Other keys a user added by hand are kept.
+const configIn = dir => path.join(dir, 'config.json');
+const readConfig = async dir => {
+  try { const c = JSON.parse(await fs.readFile(configIn(dir), 'utf8')); return c && typeof c === 'object' && !Array.isArray(c) ? c : {}; }
+  catch { return {}; } // missing or broken: scan.mjs reports a broken file
+};
+
+/** The Steam key and ID for the Settings window ('' when not set). */
+export async function loadSettings(dir) {
+  const c = await readConfig(dir);
+  return { steamApiKey: typeof c.steamApiKey === 'string' ? c.steamApiKey : '', steamId: typeof c.steamId === 'string' ? c.steamId : '' };
+}
+
+/** Saves what the page sends after checking its shape; throws a message the page can show. '' removes a value. */
+export async function saveSettings(dir, s) {
+  const key = typeof s?.steamApiKey === 'string' ? s.steamApiKey.trim() : '';
+  const id = typeof s?.steamId === 'string' ? s.steamId.trim() : '';
+  if (key && !/^[0-9a-f]{32}$/i.test(key)) throw new Error('A Steam Web API key is 32 letters and digits.');
+  if (id && !/^\d{17}$/.test(id)) throw new Error('A Steam ID is 17 digits.');
+  const c = await readConfig(dir);
+  key ? (c.steamApiKey = key) : delete c.steamApiKey;
+  id ? (c.steamId = id) : delete c.steamId;
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(`${configIn(dir)}.tmp`, JSON.stringify(c, null, 2) + '\n');
+  await fs.rename(`${configIn(dir)}.tmp`, configIn(dir));
+  return { steamApiKey: key, steamId: id };
 }
 
 /** @type {Promise<unknown>} */

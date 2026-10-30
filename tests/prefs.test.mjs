@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { cleanPrefs, loadPrefs, savePrefs } from '../prefs.mjs';
+import { cleanPrefs, loadPrefs, savePrefs, loadSettings, saveSettings } from '../prefs.mjs';
 
 test('cleanPrefs keeps well-formed data only', () => {
   const p = cleanPrefs({
@@ -20,8 +20,11 @@ test('cleanPrefs keeps well-formed data only', () => {
   assert.deepEqual(p.hidden, []);
   assert.deepEqual(Object.keys(p.tags), ['gog:gog_1']);
   assert.deepEqual(p.tags['gog:gog_1'], ['Co-op', 'co-op', 'x'.repeat(32), 'Line break']);
-  assert.deepEqual(cleanPrefs(null), { favorites: [], hidden: [], tags: {} });
+  assert.deepEqual(cleanPrefs(null), { favorites: [], hidden: [], tags: {}, same: {} });
   assert.deepEqual(cleanPrefs({ tags: ['a'] }).tags, {});
+  // "same game" links: well-formed ids to short, printable keys only
+  assert.deepEqual(cleanPrefs({ same: { 'gog:gog_1': 'the witcher 3', 'bad:1': 'x', 'steam:2': '', 'steam:3': 'a\nb', 'steam:4': 7 } }).same,
+    { 'gog:gog_1': 'the witcher 3' });
 });
 
 test('cleanPrefs: no prototype tricks, size limits', () => {
@@ -33,20 +36,33 @@ test('cleanPrefs: no prototype tricks, size limits', () => {
 
 test('save then load round-trips; saves are cleaned and atomic', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playdex-prefs-'));
-  assert.deepEqual(await loadPrefs(dir), { favorites: [], hidden: [], tags: {} }); // first run
+  assert.deepEqual(await loadPrefs(dir), { favorites: [], hidden: [], tags: {}, same: {} }); // first run
   await Promise.all([ // overlapping saves: last one wins, no .tmp left behind
     savePrefs(dir, { favorites: ['steam:1'], hidden: [], tags: {} }),
     savePrefs(dir, { favorites: ['steam:1', 'bad'], hidden: ['epic:x'], tags: { 'gog:gog_2': ['RPG'] } }),
   ]);
-  assert.deepEqual(await loadPrefs(dir), { favorites: ['steam:1'], hidden: ['epic:x'], tags: { 'gog:gog_2': ['RPG'] } });
+  assert.deepEqual(await loadPrefs(dir), { favorites: ['steam:1'], hidden: ['epic:x'], tags: { 'gog:gog_2': ['RPG'] }, same: {} });
   assert.deepEqual(fs.readdirSync(dir), ['library.json']);
 });
 
 test('an unreadable file is kept as a backup, not overwritten', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playdex-prefs-'));
   fs.writeFileSync(path.join(dir, 'library.json'), '{ broken');
-  assert.deepEqual(await loadPrefs(dir), { favorites: [], hidden: [], tags: {} });
+  assert.deepEqual(await loadPrefs(dir), { favorites: [], hidden: [], tags: {}, same: {} });
   const backup = fs.readdirSync(dir).find(f => f.startsWith('library.json.bad-'));
   assert.ok(backup);
   assert.equal(fs.readFileSync(path.join(dir, backup), 'utf8'), '{ broken');
+});
+
+test('settings: checked before saving; other config.json keys are kept', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playdex-settings-'));
+  assert.deepEqual(await loadSettings(dir), { steamApiKey: '', steamId: '' }); // first run
+  fs.writeFileSync(path.join(dir, 'config.json'), '{ "steamApiKey": "", "mine": 1 }');
+  await assert.rejects(saveSettings(dir, { steamApiKey: 'not a key' }), /32 letters/);
+  await assert.rejects(saveSettings(dir, { steamApiKey: '', steamId: '123' }), /17 digits/);
+  const key = 'ABCDEF0123456789abcdef0123456789';
+  await saveSettings(dir, { steamApiKey: ` ${key} `, steamId: '76561197960265729' });
+  assert.deepEqual(await loadSettings(dir), { steamApiKey: key, steamId: '76561197960265729' });
+  await saveSettings(dir, { steamApiKey: key, steamId: '' }); // '' removes it
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')), { steamApiKey: key, mine: 1 });
 });

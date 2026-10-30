@@ -18,7 +18,7 @@ const GAMES = [
   game('epic', 'a2', 'Alpha'),
   game('gog', 3, 'Beta', { installed: true, size: 5 * GB, drive: 'C:\\', playtime: 0 }),
   game('epic', 'd4', DELTA),
-  game('steam', 5, 'Gamma', { playtime: 90 }),
+  game('steam', 5, 'Gamma', { playtime: 90, lastPlayed: Date.now() - 300 * 864e5 }), // idle for 10 months
 ];
 const SCAN = { games: GAMES, duplicates: [{ title: 'Alpha', games: [GAMES[0], GAMES[1]] }], errors: {}, notes: [],
   drives: [{ root: 'C:\\', total: 100 * GB, free: 50 * GB }] };
@@ -34,7 +34,12 @@ beforeEach(async () => {
       prefs: async () => ({ favorites: [], hidden: [], tags: {} }),
       savePrefs: async p => p,
       details: async () => ({ description: 'Fake description' }),
-      launch: async () => true, uninstall: async () => true, exportLibrary: async () => null, openSettings: async () => {},
+      launch: async () => true, uninstall: async () => true, exportLibrary: async () => null, openKeyPage: async () => {},
+      settings: async () => ({ steamApiKey: '', steamId: '' }),
+      saveSettings: async s => { // like prefs.mjs saveSettings(): rejects a malformed key
+        if (s.steamApiKey && !/^[0-9a-f]{32}$/i.test(s.steamApiKey)) throw new Error('A Steam Web API key is 32 letters and digits.');
+        return s;
+      },
     };
   }, SCAN);
   await page.goto(PAGE);
@@ -154,4 +159,36 @@ test('a change that fails to save is undone on screen', async () => {
   await page.click('text=☆ Favorite');
   assert.equal(await page.textContent('#toast:popover-open'), 'Could not save your change.'); // above the details window
   assert.equal(await page.getAttribute('.toggle-btn >> nth=0', 'aria-pressed'), 'false');
+});
+
+test('Settings window: a malformed key is refused; a good one is saved and rescanned', async () => {
+  await page.click('#settings');
+  await page.fill('#steam-key', 'not-a-key');
+  await page.click('#settings-save');
+  await page.locator('#settings-status.bad').waitFor();
+  assert.equal(await page.textContent('#settings-status'), 'A Steam Web API key is 32 letters and digits.');
+  await page.fill('#steam-key', 'a'.repeat(32));
+  await page.keyboard.press('Enter');
+  await page.locator('#settings-status', { hasText: 'Done' }).waitFor();
+  assert.equal(await page.textContent('#settings-status'), 'Done: 2 Steam games from your key.');
+});
+
+test('Show → Not played in 6 months: played games idle that long', async () => {
+  await page.selectOption('#show', 'stale');
+  assert.deepEqual(await names(), ['Gamma']); // Alpha was played 2 days ago
+  assert.match(await page.textContent('#show option[value="stale"]'), /\(1\)$/);
+});
+
+test('"Same game as…" links two names into one game, and Unlink undoes it', async () => {
+  await page.locator('#games .card', { hasText: 'Beta' }).click();
+  await page.fill('#same-input', 'Gamma (Steam)');
+  await page.press('#same-input', 'Enter');
+  await page.locator('text=Linked by you · Unlink').waitFor();
+  assert.deepEqual(await page.locator('#details .stores .play').allTextContents(), ['⬇ Install · Steam', '▶ Play · GOG']);
+  assert.equal(await page.textContent('#dup-count'), '2');
+  assert.deepEqual(await stores(), ['Steam+Epic', 'Steam+GOG', 'Epic']); // Alpha, Beta + Gamma, Delta
+  await page.click('text=Linked by you · Unlink');
+  await page.locator('#same-input').waitFor();
+  assert.equal(await page.textContent('#dup-count'), '1');
+  assert.equal((await names()).length, 4);
 });

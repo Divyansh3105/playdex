@@ -7,6 +7,7 @@ interface Game {
   id: string;              // "<store>:<store's own id>"
   store: Store;
   key: string;             // normalized title: copies of one game on different stores share it
+  scanKey?: string;        // the page's copy of key from the scan, before "same game" links change key
   title: string;
   cover?: string | null;
   fallback?: string;
@@ -41,6 +42,13 @@ interface SavedPrefs {
   favorites: string[];
   hidden: string[];
   tags: Record<string, string[]>;
+  same?: Record<string, string>; // game id -> key of the game it is the same as
+}
+
+/** config.json, as the Settings window edits it. '' = not set. */
+interface Settings {
+  steamApiKey: string;
+  steamId: string;
 }
 
 /** window.library, from preload.cjs. */
@@ -52,7 +60,9 @@ interface Library {
   details(id: string): Promise<Details | null>;
   prefs(): Promise<SavedPrefs>;
   savePrefs(prefs: SavedPrefs): Promise<SavedPrefs>;
-  openSettings(): Promise<void>;
+  settings(): Promise<Settings>;
+  saveSettings(s: Settings): Promise<Settings>; // rejects with a message the page shows
+  openKeyPage(): Promise<void>;
 }
 
 interface Window { library: Library }

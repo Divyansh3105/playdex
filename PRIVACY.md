@@ -1,6 +1,6 @@
 # Playdex privacy policy
 
-Last updated: 5 October 2026
+Last updated: 30 October 2026
 
 Playdex collects no personal data. It has no accounts, analytics, ads or tracking, and the developer receives nothing from your PC.
 
@@ -16,7 +16,7 @@ Playdex connects only to the stores, and only to show your games:
 
 - **Cover images** from the Steam, Epic Games and GOG image servers.
 - **Game details** (description, developer, release date, genres) from the Steam Store when you open a game. It sends the game's Steam ID, or its title if it doesn't have one.
-- **Your Steam library**, only if you add your own Steam Web API key and Steam ID to `config.json`. Playdex sends them to Steam's official API (`api.steampowered.com`) to list the games you own. The key stays in `config.json` on your PC and goes only to Steam.
+- **Your Steam library**, only if you enter your own Steam Web API key in Settings (saved in `config.json`). Playdex sends the key and your Steam ID to Steam's official API (`api.steampowered.com`) to list the games you own. The key stays in `config.json` on your PC and goes only to Steam.
 
 These requests go directly from your PC to Valve, Epic and GOG, and their own privacy policies cover them.
 Playdex has no server of its own.

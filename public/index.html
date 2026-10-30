@@ -152,6 +152,19 @@
   #details .desc { margin: 0; line-height: 1.6; color: #c9cedb; white-space: pre-line; }
   #details .loading, #details .source { color: var(--muted); font-size: 13px; }
   #details .source { margin: 12px 0 0; }
+  #settings-dlg { width: min(520px, calc(100vw - 32px)); padding: 24px; color: var(--text); background: var(--panel);
+                  border: 1px solid var(--line); border-radius: 14px; }
+  #settings-dlg::backdrop { background: #000a; }
+  #settings-dlg h2 { margin: 0 0 8px; font-size: 20px; }
+  #settings-dlg label { display: block; margin: 14px 0 6px; }
+  #settings-dlg input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+  #settings-dlg button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: none; cursor: pointer; white-space: nowrap; }
+  #settings-dlg .primary { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
+  .field-row { display: flex; gap: 8px; }
+  .muted { color: var(--muted); }
+  #settings-status { min-height: 1.4em; margin: 14px 0 0; color: var(--muted); }
+  #settings-status.bad { color: #fca5a5; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   @media (max-width: 640px) { #details-content { grid-template-columns: 1fr; } #details .art { max-width: 180px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -163,7 +176,7 @@
   <div class="actions">
     <button id="rescan" title="Rescan your launchers (F5)" aria-keyshortcuts="F5">Rescan</button>
     <button id="export" title="Save your library as a CSV or JSON file">Export</button>
-    <button id="settings" title="Opens config.json, where you can add a Steam Web API key for an exact Steam library">Settings</button>
+    <button id="settings" title="Add a Steam Web API key for an exact Steam library">Settings</button>
   </div>
 </header>
 <nav>
@@ -188,6 +201,23 @@
 <dialog id="details" aria-labelledby="details-title">
   <button id="details-close" aria-label="Close">×</button>
   <div id="details-content"></div>
+</dialog>
+<dialog id="settings-dlg" aria-labelledby="settings-title">
+  <h2 id="settings-title">Settings</h2>
+  <p class="hint">Without a key, Playdex finds your Steam games in Steam's local caches, which can miss some.
+    A free Steam Web API key gets your exact Steam library. It stays on this PC and goes only to Steam.</p>
+  <label for="steam-key">Steam Web API key</label>
+  <div class="field-row">
+    <input id="steam-key" type="password" autocomplete="off" spellcheck="false" maxlength="64" placeholder="32 letters and digits">
+    <button id="key-page" type="button">Get a key ↗</button>
+  </div>
+  <label for="steam-id">Steam ID <span class="muted">(optional: only if this PC has several Steam accounts)</span></label>
+  <input id="steam-id" inputmode="numeric" autocomplete="off" maxlength="17" placeholder="17 digits">
+  <p id="settings-status" role="status"></p>
+  <div class="dlg-actions">
+    <button id="settings-cancel" type="button">Cancel</button>
+    <button id="settings-save" type="button" class="primary">Save and rescan</button>
+  </div>
 </dialog>
 
 <script src="app.js"></script>

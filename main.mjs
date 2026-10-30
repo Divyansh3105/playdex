@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { scanAll } from './scan.mjs';
 import { gameDetails } from './details.mjs';
-import { loadPrefs, savePrefs } from './prefs.mjs';
+import { loadPrefs, savePrefs, loadSettings, saveSettings } from './prefs.mjs';
 import { exportRows, toCsv } from './export.mjs';
 
 const ORIGIN = 'app://playdex/';
@@ -92,13 +92,19 @@ app.whenReady().then(() => {
     return game ? gameDetails(game) : null;
   });
 
-  // Show config.json in Explorer (creating an empty one first) so users can paste a Steam API key.
-  ipcMain.handle('open-settings', async e => {
+  // The Settings window: the Steam Web API key and Steam ID in config.json. saveSettings() checks what the page sends.
+  ipcMain.handle('settings-get', e => {
     if (!fromApp(e)) throw new Error('Forbidden');
-    const file = path.join(app.getPath('userData'), 'config.json');
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, '{\n  "steamApiKey": ""\n}\n', { flag: 'wx' }).catch(() => {}); // never overwrite
-    shell.showItemInFolder(file);
+    return loadSettings(app.getPath('userData'));
+  });
+  ipcMain.handle('settings-set', (e, s) => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return saveSettings(app.getPath('userData'), s);
+  });
+  // A fixed address: the page can't open anything else.
+  ipcMain.handle('open-key-page', e => {
+    if (!fromApp(e)) throw new Error('Forbidden');
+    return shell.openExternal('https://steamcommunity.com/dev/apikey');
   });
 
   const win = new BrowserWindow({

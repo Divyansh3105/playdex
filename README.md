@@ -17,7 +17,7 @@ window: search it once, launch any game through its own store, and see what you 
 - **One library** across Steam, Epic and GOG: no logins, no API keys, nothing uploaded. Counts match each launcher's own.
 - **One card per game**, however many stores you own it on, with **Recently played** on top and **▶ Play** on hover.
 - **Duplicates:** games you own on more than one store.
-- **Playtime and last played** (Steam and GOG), a **Not played** filter, and **🎲 What should I play?** for the backlog.
+- **Playtime and last played** (Steam and GOG), **Not played** and **Not played in 6 months** filters, and **🎲 What should I play?** for the backlog.
 - **Stats:** totals, hours played, the share of your library you've played, per-store totals, and your most played games.
 - **Disk space:** free space per drive, games largest first, and **Uninstall…** through the game's own store.
 - **Favorites, hidden games and tags**, **Export** to CSV or JSON, **auto-refresh** and **keyboard shortcuts**.
@@ -92,19 +92,17 @@ The header total counts a game you own on several stores once; each store badge 
 
 ## Optional: exact Steam library
 
-Without a key, Playdex reads Steam's local library cache, which normally matches your Steam library.
-If it's ever off (e.g. a game you own but have never opened in the Steam client), use the official API:
+Without a key, Playdex reads Steam's local library caches, which Steam clears and refills as you browse, so
+they can miss games. For the exact list, use the official API:
 
-1. Get a free key at https://steamcommunity.com/dev/apikey (any domain name works, e.g. `localhost`).
-2. In the app, click **Settings**. Explorer opens `%APPDATA%\Playdex\config.json`; paste your key and save:
-   ```json
-   { "steamApiKey": "YOUR_32_CHARACTER_KEY" }
-   ```
-3. Click **Rescan**.
+1. Click **Settings**, then **Get a key ↗**, and get a free key (any domain name works, e.g. `localhost`).
+2. Paste the key and click **Save and rescan**. The window says how many Steam games your key returned, or why
+   Steam refused it.
 
-Your Steam ID is read from Steam's `config/loginusers.vdf`. To use a different account, add `"steamId": "7656119…"`.
-`config.json` is git-ignored. Don't share the key, because it acts on your behalf with the Steam Web API.
-If the key fails, the app falls back to the local cache and shows why.
+Your Steam ID is read from Steam's `config/loginusers.vdf`. If this PC has several Steam accounts, enter yours
+(17 digits) in Settings too. Both are saved in `%APPDATA%\Playdex\config.json`, which is git-ignored.
+Don't share the key, because it acts on your behalf with the Steam Web API.
+If the key fails, the app falls back to the local caches and shows why.
 
 ## Playtime and sorting
 

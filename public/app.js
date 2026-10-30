@@ -24,18 +24,30 @@ function merge(copies) {
 // ---------- favorites, hidden, tags ----------
 // Saved by the main process (which validates them) per copy, by game id. A game is a favorite, hidden or tagged
 // if any of its copies is, and a change applies to every copy.
-let prefs = { favorites: new Set(), hidden: new Set(), tags: new Map() };
-const toPrefs = p => ({ favorites: new Set(p.favorites), hidden: new Set(p.hidden), tags: new Map(Object.entries(p.tags)) });
+let prefs = { favorites: new Set(), hidden: new Set(), tags: new Map(), same: new Map() };
+const toPrefs = p => ({ favorites: new Set(p.favorites), hidden: new Set(p.hidden), tags: new Map(Object.entries(p.tags)),
+  same: new Map(Object.entries(p.same ?? {})) });
 async function savePrefs() {
   try {
     prefs = toPrefs(await window.library.savePrefs({
-      favorites: [...prefs.favorites], hidden: [...prefs.hidden], tags: Object.fromEntries(prefs.tags),
+      favorites: [...prefs.favorites], hidden: [...prefs.hidden], tags: Object.fromEntries(prefs.tags), same: Object.fromEntries(prefs.same),
     }));
   } catch {
     toast('Could not save your change.');
     prefs = await window.library.prefs().then(toPrefs, () => prefs); // undo it on screen: show what is really saved
   }
+  relink();
   render();
+}
+
+// "Same game" links you made give a game another's key (scan.mjs matches by title only). Everything grouped by
+// game (cards, counts, duplicates) is built here, after the links are applied.
+function relink() {
+  for (const g of data.games) g.key = prefs.same.get(g.id) ?? g.scanKey ?? g.key;
+  byKey = Map.groupBy(data.games, g => g.key);
+  playedKeys = new Set(data.games.filter(played).map(g => g.key));
+  data.duplicates = [...byKey.values()].filter(l => new Set(l.map(g => g.store)).size > 1)
+    .map(l => ({ title: l[0].title, games: l })).sort((a, b) => a.title.localeCompare(b.title));
 }
 const allTags = () => [...new Set([...prefs.tags.values()].flat())].sort((a, b) => a.localeCompare(b));
 const copiesOf = g => byKey.get(g.key) ?? [g];
@@ -49,6 +61,7 @@ function shown(g) {
   if (state.show === 'installed') return g.installed;
   if (state.show === 'favorites') return isIn('favorites', g);
   if (state.show === 'unplayed') return notPlayed(g);
+  if (state.show === 'stale') return idle(g);
   if (state.show.startsWith('tag:')) return tagsOf(g).includes(state.show.slice(4));
   return true;
 }
@@ -58,6 +71,7 @@ function renderShowMenu() {
   const count = test => games.filter(test).length;
   const options = [['all', 'All games'], ['installed', `Installed (${count(g => g.installed)})`],
     ['unplayed', `Not played (${count(g => notPlayed(g) && !isIn('hidden', g))})`],
+    ['stale', `Not played in 6 months (${count(g => idle(g) && !isIn('hidden', g))})`],
     ['favorites', `Favorites (${count(g => isIn('favorites', g))})`], ['hidden', `Hidden (${count(g => isIn('hidden', g))})`]];
   const tags = allTags().map(t => [`tag:${t}`, `${t} (${count(g => tagsOf(g).includes(t))})`]);
   if (![...options, ...tags].some(([v]) => v === state.show)) state.show = 'all'; // e.g. its last tag was removed
@@ -108,13 +122,38 @@ function prefsControls(g) {
       el('div', { className: 'tags' },
         ...tags.map(t => el('span', { className: 'tag' }, t, el('button', { textContent: '×', ariaLabel: `Remove tag ${t}`, title: 'Remove tag', onclick: remove(t) }))),
         input),
-      el('datalist', { id: 'tag-suggestions' }, ...allTags().filter(t => !tags.includes(t)).map(t => el('option', { value: t }))));
+      el('datalist', { id: 'tag-suggestions' }, ...allTags().filter(t => !tags.includes(t)).map(t => el('option', { value: t }))),
+      sameControl(g));
   };
   draw();
   return box;
 }
 
-/** @type {{ (id: 'details'): HTMLDialogElement, (id: 'q'): HTMLInputElement, (id: 'sort' | 'show'): HTMLSelectElement, (id: 'pick'): HTMLButtonElement, (id: string): HTMLElement }} */
+/** "Same game as…": link a game with a different name on another store, or undo a link you made. */
+function sameControl(g) {
+  const copies = copiesOf(g), mine = new Set(copies.map(c => c.store));
+  const reopen = id => openDetails(merge(copiesOf(data.games.find(x => x.id === id) ?? g)));
+  if (copies.some(c => prefs.same.has(c.id))) {
+    return el('div', { className: 'mine-row' }, el('button', { className: 'toggle-btn', textContent: 'Linked by you · Unlink', onclick: async () => {
+      copies.forEach(c => prefs.same.delete(c.id));
+      await savePrefs(); reopen(g.id);
+    } }));
+  }
+  // Games on stores this one isn't on, by "Title (Store)".
+  const options = new Map(data.games.filter(o => !mine.has(o.store)).map(o => [`${o.title} (${STORES[o.store]})`, o]));
+  const input = el('input', { className: 'tag-input', id: 'same-input', placeholder: 'Same game as…', ariaLabel: 'Same game as',
+    title: 'The same game under another name on another store: pick it, then press Enter' });
+  input.setAttribute('list', 'same-options');
+  input.onkeydown = async e => {
+    const target = options.get(input.value);
+    if (e.key !== 'Enter' || !target) return;
+    copies.forEach(c => prefs.same.set(c.id, target.key));
+    await savePrefs(); reopen(target.id);
+  };
+  return el('div', { className: 'tags' }, input, el('datalist', { id: 'same-options' }, ...[...options.keys()].map(value => el('option', { value }))));
+}
+
+/** @type {{ (id: 'details' | 'settings-dlg'): HTMLDialogElement, (id: 'q' | 'steam-key' | 'steam-id'): HTMLInputElement, (id: 'sort' | 'show'): HTMLSelectElement, (id: 'pick' | 'settings-save'): HTMLButtonElement, (id: string): HTMLElement }} */
 const $ = /** @type {any} */ (id => document.getElementById(id));
 const el = (tag, props = {}, ...kids) => {
   const e = Object.assign(document.createElement(tag), props);
@@ -161,6 +200,7 @@ function ago(ms) {
 }
 const played = g => g.playtime > 0 || g.lastPlayed;
 const notPlayed = g => g.playtime != null && !playedKeys.has(g.key); // Epic (unknown playtime) never counts as not played
+const idle = g => g.lastPlayed > 0 && Date.now() - g.lastPlayed > 182 * 864e5; // played, but not for 6 months
 const playLine = g => g.playtime == null ? '' : !played(g) ? 'Not played' : [hours(g.playtime), g.lastPlayed && ago(g.lastPlayed)].filter(Boolean).join(' · ');
 
 // Scan order is A–Z, and sort() is stable, so ties stay alphabetical. Unknown playtime (Epic) sorts last.
@@ -402,10 +442,10 @@ async function load(quiet = false) {
   try {
     const [scan, saved] = await Promise.all([window.library.scan(), window.library.prefs().catch(() => null)]);
     data = scan;
-    playedKeys = new Set(scan.games.filter(played).map(g => g.key));
-    byKey = Map.groupBy(scan.games, g => g.key);
+    for (const g of scan.games) g.scanKey = g.key;
     if (saved) prefs = toPrefs(saved);
     else if (!quiet) toast('Could not load your favorites and tags.');
+    relink();
     render();
   } catch (e) {
     if (quiet) toast('Could not refresh the library.');
@@ -467,7 +507,7 @@ const SHORTCUTS = '/ or Ctrl+F search · Esc clear · 1–4 tabs · P pick a gam
 document.onkeydown = e => {
   const key = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey, target = /** @type {Element} */ (e.target);
   if (e.key === 'F5') { e.preventDefault(); load(); return; }
-  if ($('details').open) return; // the window is modal; Esc closes it natively
+  if (document.querySelector('dialog[open]')) return; // details or settings: modal; Esc closes them natively
   if (target === $('q') && e.key === 'Escape') {
     if ($('q').value) { $('q').value = ''; $('q').dispatchEvent(new Event('input')); } else $('q').blur();
     e.preventDefault();
@@ -485,8 +525,31 @@ document.onkeydown = e => {
 };
 $('details-close').onclick = () => $('details').close();
 $('details').onclick = e => { if (e.target === $('details')) $('details').close(); }; // click on the backdrop
-$('settings').onclick = () => {
-  window.library.openSettings();
-  toast('Add your Steam API key to config.json, save it, then click Rescan.');
+// ---------- settings ----------
+const say = (text, bad = false) => { $('settings-status').textContent = text; $('settings-status').classList.toggle('bad', bad); };
+$('settings').onclick = async () => {
+  const s = await window.library.settings().catch(() => ({ steamApiKey: '', steamId: '' }));
+  $('steam-key').value = s.steamApiKey;
+  $('steam-id').value = s.steamId;
+  say('');
+  $('settings-dlg').showModal();
 };
+$('key-page').onclick = () => window.library.openKeyPage();
+$('settings-cancel').onclick = () => $('settings-dlg').close();
+$('settings-save').onclick = async () => {
+  $('settings-save').disabled = true;
+  try {
+    const s = await window.library.saveSettings({ steamApiKey: $('steam-key').value, steamId: $('steam-id').value });
+    say('Saved. Rescanning…');
+    await load(true);
+    // The scan tells whether Steam took the key (a note), or how many games it listed.
+    const note = data?.notes.find(n => n.startsWith('Steam API'));
+    if (note) say(note, true);
+    else say(s.steamApiKey ? `Done: ${data.games.filter(g => g.store === 'steam').length} Steam games from your key.`
+      : "Saved. Steam games come from Steam's local caches.");
+  } catch (e) {
+    say(String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true); // saveSettings()'s message
+  } finally { $('settings-save').disabled = false; }
+};
+for (const id of ['steam-key', 'steam-id']) $(id).onkeydown = e => { if (e.key === 'Enter') $('settings-save').click(); };
 load();

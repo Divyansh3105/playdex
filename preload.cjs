@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('library', {
   details: id => ipcRenderer.invoke('details', String(id)),
   prefs: () => ipcRenderer.invoke('prefs-get'),
   savePrefs: prefs => ipcRenderer.invoke('prefs-set', prefs),
-  openSettings: () => ipcRenderer.invoke('open-settings'),
+  settings: () => ipcRenderer.invoke('settings-get'),
+  saveSettings: s => ipcRenderer.invoke('settings-set', s),
+  openKeyPage: () => ipcRenderer.invoke('open-key-page'),
 });
