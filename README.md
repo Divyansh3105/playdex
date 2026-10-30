@@ -49,13 +49,13 @@ and on PCs with **Smart App Control** turned on Windows blocks it entirely. Use 
 
 ## Screenshots
 
-![Playdex library: every Steam, Epic and GOG game in one cover grid, with store badges, playtime and per-store counts](docs/screenshot-library.jpg)
+![Playdex library: Recently played on top, then every Steam, Epic and GOG game in one cover grid, one card per game with its stores and playtime](docs/screenshot-library.jpg)
 
 ![Duplicates tab: the 12 games owned on more than one store, each with a button per store](docs/screenshot-duplicates.jpg)
 
-![Stats tab: 302 games, hours played, share played, disk use, and the most played games](docs/screenshot-stats.jpg)
+![Stats tab: 312 games, hours played, share played, disk use, totals per store, and the most played games](docs/screenshot-stats.jpg)
 
-![Game details: description, developer, release date and genres, with an Install button for each store that owns the game](docs/screenshot-details.jpg)
+![Game details: the game's art blurred behind it, description, developer, release date and genres, with a button for each store that owns the game](docs/screenshot-details.jpg)
 
 ## Design decisions
 
