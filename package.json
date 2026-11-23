@@ -62,10 +62,10 @@
     "node": ">=22.13"
   },
   "devDependencies": {
-    "@types/node": "^24.19.1",
-    "electron": "^44.5.1",
-    "electron-builder": "^26.15.3",
-    "playwright-core": "^1.63.0",
+    "@types/node": "^24.19.2",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "playwright-core": "^1.65.1",
     "typescript": "^7.0.2"
   }
 }
